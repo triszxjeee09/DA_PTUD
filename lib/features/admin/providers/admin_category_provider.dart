@@ -1,7 +1,7 @@
 import 'package:flutter/foundation.dart';
 
 import '../../../core/errors/api_exception.dart';
-import '../../category/data/models/category_model.dart';
+import '../data/models/admin_category_model.dart';
 import '../data/models/admin_category_request_model.dart';
 import '../data/services/admin_category_service.dart';
 
@@ -14,46 +14,86 @@ class AdminCategoryProvider extends ChangeNotifier {
 
   final AdminCategoryService _adminCategoryService;
 
-  List<CategoryModel> _categories = const [];
-  CategoryModel? _selectedCategory;
+  final List<AdminCategoryModel> _categories = [];
+  AdminCategoryModel? _selectedCategory;
   bool _isLoading = false;
-  bool _isLoadingDetail = false;
-  bool _isSaving = false;
+  bool _isLoadingMore = false;
+  bool _isSubmitting = false;
   bool _isDeleting = false;
   String? _errorMessage;
-  String _keyword = '';
+  int _currentPage = 0;
+  bool _hasMore = true;
+  String? _currentKeyword;
+  bool? _currentIsActiveFilter;
 
-  List<CategoryModel> get categories {
-    final keyword = _keyword.toLowerCase().trim();
-    if (keyword.isEmpty) {
-      return _categories;
-    }
-
-    return _categories.where((category) {
-      return category.name.toLowerCase().contains(keyword) ||
-          category.slug.toLowerCase().contains(keyword) ||
-          (category.description ?? '').toLowerCase().contains(keyword);
-    }).toList();
-  }
-
-  List<CategoryModel> get allCategories => _categories;
-  CategoryModel? get selectedCategory => _selectedCategory;
+  List<AdminCategoryModel> get categories => List.unmodifiable(_categories);
+  List<AdminCategoryModel> get allCategories => categories;
+  AdminCategoryModel? get selectedCategory => _selectedCategory;
   bool get isLoading => _isLoading;
-  bool get isLoadingDetail => _isLoadingDetail;
-  bool get isSaving => _isSaving;
+  bool get isLoadingDetail => _isLoading;
+  bool get isLoadingMore => _isLoadingMore;
+  bool get isSubmitting => _isSubmitting;
+  bool get isSaving => _isSubmitting;
   bool get isDeleting => _isDeleting;
   String? get errorMessage => _errorMessage;
-  String get keyword => _keyword;
+  int get currentPage => _currentPage;
+  bool get hasMore => _hasMore;
+  String? get currentKeyword => _currentKeyword;
+  String get keyword => _currentKeyword ?? '';
+  bool? get currentIsActiveFilter => _currentIsActiveFilter;
 
-  Future<void> loadCategories({String? keyword}) async {
-    if (keyword != null) {
-      _keyword = keyword.trim();
+  Future<void> loadCategories({
+    bool refresh = false,
+    String? keyword,
+    bool? isActive,
+  }) async {
+    final nextKeyword = _emptyToNull(keyword);
+    final filterChanged =
+        nextKeyword != _currentKeyword || isActive != _currentIsActiveFilter;
+    final shouldRefresh = refresh || filterChanged;
+
+    if (shouldRefresh) {
+      _currentPage = 0;
+      _categories.clear();
+      _hasMore = true;
+    } else if (!_hasMore) {
+      return;
     }
 
+    _currentKeyword = nextKeyword;
+    _currentIsActiveFilter = isActive;
+
+    final loadingMore = !shouldRefresh && _categories.isNotEmpty;
+    _setLoadingState(loadingMore: loadingMore, value: true);
+
+    try {
+      final response = await _adminCategoryService.getCategories(
+        page: _currentPage,
+        keyword: _currentKeyword,
+        isActive: _currentIsActiveFilter,
+      );
+
+      final existingIds = _categories.map((category) => category.id).toSet();
+      final newCategories = response.content
+          .where((category) => !existingIds.contains(category.id))
+          .toList();
+
+      _categories.addAll(newCategories);
+      _currentPage = response.page + 1;
+      _hasMore = !response.last;
+      _errorMessage = null;
+    } catch (error) {
+      _errorMessage = _readErrorMessage(error);
+    } finally {
+      _setLoadingState(loadingMore: loadingMore, value: false);
+    }
+  }
+
+  Future<void> loadCategoryDetail(String id) async {
     _setLoading(true);
 
     try {
-      _categories = await _adminCategoryService.getCategories();
+      _selectedCategory = await _adminCategoryService.getCategoryById(id);
       _errorMessage = null;
     } catch (error) {
       _errorMessage = _readErrorMessage(error);
@@ -62,32 +102,16 @@ class AdminCategoryProvider extends ChangeNotifier {
     }
   }
 
-  void search(String keyword) {
-    _keyword = keyword.trim();
-    notifyListeners();
-  }
-
-  Future<CategoryModel?> loadCategoryDetail(String id) async {
-    _setLoadingDetail(true);
-
-    try {
-      _selectedCategory = await _adminCategoryService.getCategoryDetail(id);
-      _errorMessage = null;
-      return _selectedCategory;
-    } catch (error) {
-      _errorMessage = _readErrorMessage(error);
-      return null;
-    } finally {
-      _setLoadingDetail(false);
-    }
-  }
-
   Future<bool> createCategory(AdminCategoryRequestModel request) async {
-    _setSaving(true);
+    _setSubmitting(true);
 
     try {
       await _adminCategoryService.createCategory(request);
-      await loadCategories();
+      await loadCategories(
+        refresh: true,
+        keyword: _currentKeyword,
+        isActive: _currentIsActiveFilter,
+      );
       _errorMessage = null;
       return true;
     } catch (error) {
@@ -95,7 +119,7 @@ class AdminCategoryProvider extends ChangeNotifier {
       notifyListeners();
       return false;
     } finally {
-      _setSaving(false);
+      _setSubmitting(false);
     }
   }
 
@@ -103,11 +127,15 @@ class AdminCategoryProvider extends ChangeNotifier {
     String id,
     AdminCategoryRequestModel request,
   ) async {
-    _setSaving(true);
+    _setSubmitting(true);
 
     try {
       await _adminCategoryService.updateCategory(id, request);
-      await loadCategories();
+      await loadCategories(
+        refresh: true,
+        keyword: _currentKeyword,
+        isActive: _currentIsActiveFilter,
+      );
       _errorMessage = null;
       return true;
     } catch (error) {
@@ -115,7 +143,7 @@ class AdminCategoryProvider extends ChangeNotifier {
       notifyListeners();
       return false;
     } finally {
-      _setSaving(false);
+      _setSubmitting(false);
     }
   }
 
@@ -124,8 +152,12 @@ class AdminCategoryProvider extends ChangeNotifier {
 
     try {
       await _adminCategoryService.deleteCategory(id);
-      await loadCategories();
+      _categories.removeWhere((category) => category.id == id);
+      if (_selectedCategory?.id == id) {
+        _selectedCategory = null;
+      }
       _errorMessage = null;
+      notifyListeners();
       return true;
     } catch (error) {
       _errorMessage = _readErrorMessage(error);
@@ -133,6 +165,36 @@ class AdminCategoryProvider extends ChangeNotifier {
       return false;
     } finally {
       _setDeleting(false);
+    }
+  }
+
+  void clearSelectedCategory() {
+    if (_selectedCategory == null) {
+      return;
+    }
+
+    _selectedCategory = null;
+    notifyListeners();
+  }
+
+  void clearError() {
+    if (_errorMessage == null) {
+      return;
+    }
+
+    _errorMessage = null;
+    notifyListeners();
+  }
+
+  void search(String keyword) {
+    loadCategories(refresh: true, keyword: keyword);
+  }
+
+  void _setLoadingState({required bool loadingMore, required bool value}) {
+    if (loadingMore) {
+      _setLoadingMore(value);
+    } else {
+      _setLoading(value);
     }
   }
 
@@ -145,21 +207,21 @@ class AdminCategoryProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  void _setLoadingDetail(bool value) {
-    if (_isLoadingDetail == value) {
+  void _setLoadingMore(bool value) {
+    if (_isLoadingMore == value) {
       return;
     }
 
-    _isLoadingDetail = value;
+    _isLoadingMore = value;
     notifyListeners();
   }
 
-  void _setSaving(bool value) {
-    if (_isSaving == value) {
+  void _setSubmitting(bool value) {
+    if (_isSubmitting == value) {
       return;
     }
 
-    _isSaving = value;
+    _isSubmitting = value;
     notifyListeners();
   }
 
@@ -178,5 +240,10 @@ class AdminCategoryProvider extends ChangeNotifier {
     }
 
     return _defaultErrorMessage;
+  }
+
+  String? _emptyToNull(String? value) {
+    final text = value?.trim();
+    return text == null || text.isEmpty ? null : text;
   }
 }

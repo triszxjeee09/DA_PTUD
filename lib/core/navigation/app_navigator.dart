@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../../app/routes.dart';
@@ -34,9 +33,7 @@ class AppNavigator {
 
     _isRedirectingToLogin = true;
     scaffoldMessengerKey.currentState?.showSnackBar(
-      const SnackBar(
-        content: Text('Phiên đăng nhập đã hết hạn, vui lòng đăng nhập lại'),
-      ),
+      const SnackBar(content: Text('Phiên đăng nhập đã hết hạn')),
     );
 
     navigator.pushNamedAndRemoveUntil(AppRoutes.login, (route) => false);
@@ -45,16 +42,16 @@ class AppNavigator {
     });
   }
 
-  static void showForbiddenMessage() {
+  static void showForbiddenMessage({
+    String message = 'Bạn không có quyền thực hiện thao tác này',
+  }) {
     if (_isShowingForbiddenMessage) {
       return;
     }
 
     _isShowingForbiddenMessage = true;
     scaffoldMessengerKey.currentState?.showSnackBar(
-      const SnackBar(
-        content: Text('Bạn không có quyền thực hiện thao tác này'),
-      ),
+      SnackBar(content: Text(message)),
     );
 
     Future<void>.delayed(const Duration(milliseconds: 600), () {

@@ -213,13 +213,11 @@ class _PharmacyCard extends StatelessWidget {
     required this.pharmacy,
     required this.onDetail,
     required this.onDirection,
-    this.showDetailButton = true,
   });
 
   final PharmacyModel pharmacy;
   final VoidCallback onDetail;
   final VoidCallback onDirection;
-  final bool showDetailButton;
 
   @override
   Widget build(BuildContext context) {
@@ -288,15 +286,13 @@ class _PharmacyCard extends StatelessWidget {
             const SizedBox(height: 14),
             Row(
               children: [
-                if (showDetailButton) ...[
-                  Expanded(
-                    child: OutlinedButton(
-                      onPressed: onDetail,
-                      child: const Text('Xem chi tiết'),
-                    ),
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: onDetail,
+                    child: const Text('Xem chi tiết'),
                   ),
-                  const SizedBox(width: 10),
-                ],
+                ),
+                const SizedBox(width: 10),
                 Expanded(
                   child: ElevatedButton.icon(
                     onPressed: onDirection,

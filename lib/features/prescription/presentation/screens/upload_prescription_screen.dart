@@ -408,17 +408,13 @@ class _WarningNote extends StatelessWidget {
 }
 
 class _DashedBorderPainter extends CustomPainter {
-  const _DashedBorderPainter({
-    required this.color,
-    required this.radius,
-    this.dashWidth = 8,
-    this.gapWidth = 5,
-  });
+  const _DashedBorderPainter({required this.color, required this.radius});
 
   final Color color;
   final double radius;
-  final double dashWidth;
-  final double gapWidth;
+
+  static const double _dashWidth = 8;
+  static const double _gapWidth = 5;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -434,19 +430,16 @@ class _DashedBorderPainter extends CustomPainter {
     for (final metric in path.computeMetrics()) {
       var distance = 0.0;
       while (distance < metric.length) {
-        final nextDistance = distance + dashWidth;
+        final nextDistance = distance + _dashWidth;
         final dashEnd = nextDistance.clamp(0.0, metric.length).toDouble();
         canvas.drawPath(metric.extractPath(distance, dashEnd), paint);
-        distance = nextDistance + gapWidth;
+        distance = nextDistance + _gapWidth;
       }
     }
   }
 
   @override
   bool shouldRepaint(covariant _DashedBorderPainter oldDelegate) {
-    return oldDelegate.color != color ||
-        oldDelegate.radius != radius ||
-        oldDelegate.dashWidth != dashWidth ||
-        oldDelegate.gapWidth != gapWidth;
+    return oldDelegate.color != color || oldDelegate.radius != radius;
   }
 }

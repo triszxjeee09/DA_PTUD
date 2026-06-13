@@ -8,6 +8,7 @@ import '../../../../core/network/dio_client.dart';
 import '../models/auth_response_model.dart';
 import '../models/forgot_password_request_model.dart';
 import '../models/forgot_password_response_model.dart';
+import '../models/google_login_request_model.dart';
 import '../models/login_request_model.dart';
 import '../models/register_request_model.dart';
 import '../models/reset_password_with_otp_request_model.dart';
@@ -33,6 +34,40 @@ class AuthService {
     );
 
     return _requireData(response);
+  }
+
+  Future<AuthResponseModel> loginWithGoogle(String idToken) async {
+    final normalizedIdToken = idToken.trim();
+    if (normalizedIdToken.isEmpty) {
+      throw const ApiException(
+        'Dữ liệu đăng nhập Google không hợp lệ',
+        statusCode: 400,
+      );
+    }
+
+    final request = GoogleLoginRequestModel(idToken: normalizedIdToken);
+    const fallbackMessage = 'Đăng nhập Google không thành công';
+
+    try {
+      final response = await _dioClient.post<dynamic>(
+        ApiConstants.googleLogin,
+        data: request.toJson(),
+        options: Options(extra: const {'skipAuth': true}),
+      );
+      final apiResponse = _parseApiResponse<AuthResponseModel>(
+        response.data,
+        (json) => AuthResponseModel.fromJson(_asJsonObject(json)),
+        fallbackMessage: fallbackMessage,
+      );
+
+      return _requireData(apiResponse, fallbackMessage: fallbackMessage);
+    } on DioException catch (error) {
+      throw _toGoogleLoginException(error);
+    } on ApiException catch (error) {
+      throw _googleLoginExceptionFromStatus(error.statusCode, error.message);
+    } catch (_) {
+      throw const ApiException(fallbackMessage);
+    }
   }
 
   Future<AuthResponseModel> register(RegisterRequestModel request) async {
@@ -196,10 +231,7 @@ class AuthService {
       );
     }
 
-    if (error.type == DioExceptionType.connectionTimeout ||
-        error.type == DioExceptionType.receiveTimeout ||
-        error.type == DioExceptionType.sendTimeout ||
-        error.type == DioExceptionType.connectionError) {
+    if (_isConnectionError(error)) {
       return ApiException(
         _extractBackendMessage(error.response?.data) ??
             fallbackMessage ??
@@ -216,6 +248,51 @@ class AuthService {
     );
   }
 
+  ApiException _toGoogleLoginException(DioException error) {
+    final backendMessage = _extractBackendMessage(error.response?.data);
+    if (_isConnectionError(error)) {
+      return ApiException(
+        backendMessage ?? _connectionErrorMessage,
+        statusCode: error.response?.statusCode,
+      );
+    }
+
+    return _googleLoginExceptionFromStatus(
+      error.response?.statusCode,
+      backendMessage,
+    );
+  }
+
+  ApiException _googleLoginExceptionFromStatus(
+    int? statusCode,
+    String? message,
+  ) {
+    final trimmedMessage = message?.trim();
+    if (trimmedMessage != null && trimmedMessage.isNotEmpty) {
+      return ApiException(trimmedMessage, statusCode: statusCode);
+    }
+
+    return ApiException(
+      _googleLoginFallbackMessage(statusCode),
+      statusCode: statusCode,
+    );
+  }
+
+  String _googleLoginFallbackMessage(int? statusCode) {
+    switch (statusCode) {
+      case 400:
+        return 'Dữ liệu đăng nhập Google không hợp lệ';
+      case 401:
+        return 'Tài khoản Google không hợp lệ hoặc đã hết hạn';
+      case 403:
+        return 'Tài khoản không được phép đăng nhập';
+      case 409:
+        return 'Tài khoản Google đã được liên kết với người dùng khác';
+      default:
+        return 'Đăng nhập Google không thành công';
+    }
+  }
+
   bool _isConnectionError(DioException error) {
     return error.type == DioExceptionType.connectionTimeout ||
         error.type == DioExceptionType.receiveTimeout ||
@@ -229,6 +306,13 @@ class AuthService {
 
   String? _extractBackendMessage(Object? data) {
     if (data is Map<String, dynamic>) {
+      final message = data['message'];
+      if (message is String && message.trim().isNotEmpty) {
+        return message;
+      }
+    }
+
+    if (data is Map) {
       final message = data['message'];
       if (message is String && message.trim().isNotEmpty) {
         return message;

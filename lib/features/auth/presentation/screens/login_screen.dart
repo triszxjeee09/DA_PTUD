@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:provider/provider.dart';
 
 import '../../../../app/routes.dart';
 import '../../../../app/theme.dart';
+import '../../data/models/user_model.dart';
 import '../../providers/auth_provider.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -45,13 +47,39 @@ class _LoginScreenState extends State<LoginScreen> {
 
     if (success) {
       Navigator.of(context).pushNamedAndRemoveUntil(
-        AppRoutes.authenticatedHomeForUser(authProvider.currentUser),
+        _homeRouteForUser(authProvider.currentUser),
         (route) => false,
       );
       return;
     }
 
     final message = authProvider.errorMessage;
+    if (message != null && message.isNotEmpty) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(message)));
+    }
+  }
+
+  Future<void> _submitGoogle() async {
+    FocusScope.of(context).unfocus();
+
+    final authProvider = context.read<AuthProvider>();
+    final success = await authProvider.loginWithGoogle();
+
+    if (!mounted) {
+      return;
+    }
+
+    if (success) {
+      Navigator.of(context).pushNamedAndRemoveUntil(
+        _homeRouteForUser(authProvider.currentUser),
+        (route) => false,
+      );
+      return;
+    }
+
+    final message = authProvider.googleLoginError;
     if (message != null && message.isNotEmpty) {
       ScaffoldMessenger.of(
         context,
@@ -178,10 +206,12 @@ class _LoginScreenState extends State<LoginScreen> {
                           ),
                         ),
                       ),
-                      if (authProvider.errorMessage != null) ...[
+                      if (authProvider.errorMessage != null ||
+                          authProvider.googleLoginError != null) ...[
                         const SizedBox(height: 8),
                         Text(
-                          authProvider.errorMessage!,
+                          authProvider.errorMessage ??
+                              authProvider.googleLoginError!,
                           textAlign: TextAlign.center,
                           style: const TextStyle(
                             color: AppTheme.error,
@@ -191,7 +221,11 @@ class _LoginScreenState extends State<LoginScreen> {
                       ],
                       const SizedBox(height: 16),
                       ElevatedButton(
-                        onPressed: authProvider.isLoading ? null : _submit,
+                        onPressed:
+                            authProvider.isLoading ||
+                                authProvider.isGoogleLoading
+                            ? null
+                            : _submit,
                         child: authProvider.isLoading
                             ? const SizedBox(
                                 width: 22,
@@ -202,6 +236,17 @@ class _LoginScreenState extends State<LoginScreen> {
                                 ),
                               )
                             : const Text('Đăng nhập'),
+                      ),
+                      const SizedBox(height: 18),
+                      const _AuthDivider(),
+                      const SizedBox(height: 18),
+                      _GoogleLoginButton(
+                        isLoading: authProvider.isGoogleLoading,
+                        onPressed:
+                            authProvider.isLoading ||
+                                authProvider.isGoogleLoading
+                            ? null
+                            : _submitGoogle,
                       ),
                     ],
                   ),
@@ -236,6 +281,148 @@ class _LoginScreenState extends State<LoginScreen> {
           },
         ),
       ),
+    );
+  }
+
+  String _homeRouteForUser(UserModel? user) {
+    if (user?.isAdmin ?? false) {
+      return AppRoutes.admin;
+    }
+
+    if (user?.isPharmacist ?? false) {
+      return AppRoutes.pharmacist;
+    }
+
+    return AppRoutes.main;
+  }
+}
+
+class _AuthDivider extends StatelessWidget {
+  const _AuthDivider();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Row(
+      children: [
+        Expanded(child: Divider()),
+        Padding(
+          padding: EdgeInsets.symmetric(horizontal: 12),
+          child: Text(
+            'Hoặc tiếp tục với',
+            style: TextStyle(
+              color: AppTheme.textSecondary,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+        Expanded(child: Divider()),
+      ],
+    );
+  }
+}
+
+class _GoogleLoginButton extends StatelessWidget {
+  const _GoogleLoginButton({required this.isLoading, required this.onPressed});
+
+  final bool isLoading;
+  final VoidCallback? onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      button: true,
+      label: 'Đăng nhập bằng tài khoản Google',
+      child: SizedBox(
+        width: double.infinity,
+        height: 52,
+        child: OutlinedButton(
+          onPressed: onPressed,
+          style: OutlinedButton.styleFrom(
+            backgroundColor: Colors.white,
+            foregroundColor: AppTheme.textPrimary,
+            disabledForegroundColor: AppTheme.textSecondary,
+            side: const BorderSide(color: Color(0xFFE5E7EB)),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
+            padding: const EdgeInsets.symmetric(horizontal: 18),
+          ),
+          child: AnimatedSwitcher(
+            duration: const Duration(milliseconds: 180),
+            child: isLoading
+                ? const _GoogleLoadingContent()
+                : const _GoogleButtonContent(),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _GoogleButtonContent extends StatelessWidget {
+  const _GoogleButtonContent();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Row(
+      key: ValueKey('google-idle'),
+      mainAxisAlignment: MainAxisAlignment.center,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _GoogleIcon(),
+        SizedBox(width: 12),
+        Text(
+          'Đăng nhập với Google',
+          style: TextStyle(
+            color: AppTheme.textPrimary,
+            fontSize: 16,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _GoogleLoadingContent extends StatelessWidget {
+  const _GoogleLoadingContent();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Row(
+      key: ValueKey('google-loading'),
+      mainAxisAlignment: MainAxisAlignment.center,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        SizedBox(
+          width: 18,
+          height: 18,
+          child: CircularProgressIndicator(strokeWidth: 2.4),
+        ),
+        SizedBox(width: 12),
+        Text(
+          'Đang đăng nhập...',
+          style: TextStyle(
+            color: AppTheme.textSecondary,
+            fontSize: 16,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _GoogleIcon extends StatelessWidget {
+  const _GoogleIcon();
+
+  @override
+  Widget build(BuildContext context) {
+    return SvgPicture.asset(
+      'assets/icons/google_logo.svg',
+      width: 22,
+      height: 22,
+      semanticsLabel: 'Google',
     );
   }
 }

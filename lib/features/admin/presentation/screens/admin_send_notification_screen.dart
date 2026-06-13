@@ -117,7 +117,7 @@ class _AdminSendNotificationScreenState
           children: [
             Card(
               child: SwitchListTile(
-                activeColor: AppTheme.primaryBlue,
+                activeThumbColor: AppTheme.primaryBlue,
                 value: _sendToAllCustomers,
                 onChanged: _isSubmitting
                     ? null
@@ -182,7 +182,7 @@ class _AdminSendNotificationScreenState
             ),
             const SizedBox(height: 12),
             DropdownButtonFormField<String>(
-              value: _type,
+              initialValue: _type,
               decoration: const InputDecoration(
                 labelText: 'Loại thông báo',
                 prefixIcon: Icon(Icons.notifications_rounded),

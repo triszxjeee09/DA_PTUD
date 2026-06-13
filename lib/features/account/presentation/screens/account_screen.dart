@@ -19,11 +19,15 @@ class AccountScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final user = context.watch<AuthProvider>().currentUser;
-    final fullName = user?.fullName?.trim();
+    if (user == null) {
+      return const _GuestAccountScreen();
+    }
+
+    final fullName = user.fullName?.trim();
     final displayName = fullName != null && fullName.isNotEmpty
         ? fullName
         : 'Khách hàng';
-    final contact = _readContact(user?.email, user?.phone);
+    final contact = _readContact(user.email, user.phone);
 
     return Scaffold(
       backgroundColor: const Color(0xFFF5F9FF),
@@ -33,7 +37,7 @@ class AccountScreen extends StatelessWidget {
             child: _AccountHeader(
               displayName: displayName,
               contact: contact,
-              avatarUrl: user?.avatarUrl,
+              avatarUrl: user.avatarUrl,
             ),
           ),
           SliverPadding(
@@ -112,7 +116,7 @@ class AccountScreen extends StatelessWidget {
       return normalizedPhone;
     }
 
-    return 'Chưa cập nhật thông tin liên hệ';
+    return 'Chưa cập nhật thông tin';
   }
 
   static void _openRouteSafely(BuildContext context, String routeName) {
@@ -166,6 +170,64 @@ class AccountScreen extends StatelessWidget {
     Navigator.of(
       context,
     ).pushNamedAndRemoveUntil(AppRoutes.login, (route) => false);
+  }
+}
+
+class _GuestAccountScreen extends StatelessWidget {
+  const _GuestAccountScreen();
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFFF5F9FF),
+      body: CustomScrollView(
+        slivers: [
+          const SliverToBoxAdapter(
+            child: _AccountHeader(
+              displayName: 'Khách hàng',
+              contact: 'Chưa cập nhật thông tin',
+            ),
+          ),
+          SliverPadding(
+            padding: const EdgeInsets.fromLTRB(20, 20, 20, 28),
+            sliver: SliverToBoxAdapter(
+              child: Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(20),
+                  child: Column(
+                    children: [
+                      const Icon(
+                        Icons.lock_outline_rounded,
+                        color: AppTheme.primaryBlue,
+                        size: 42,
+                      ),
+                      const SizedBox(height: 12),
+                      const Text(
+                        'Vui lòng đăng nhập để xem và cập nhật thông tin cá nhân.',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: AppTheme.textPrimary,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 18),
+                      ElevatedButton.icon(
+                        onPressed: () {
+                          Navigator.of(context).pushNamed(AppRoutes.login);
+                        },
+                        icon: const Icon(Icons.login_rounded),
+                        label: const Text('Đăng nhập'),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 

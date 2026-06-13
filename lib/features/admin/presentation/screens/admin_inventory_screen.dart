@@ -258,7 +258,10 @@ class _FilterPanel extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         DropdownButtonFormField<String>(
-          value: _safeValue(pharmacyId, pharmacies.map((item) => item.id)),
+          initialValue: _safeValue(
+            pharmacyId,
+            pharmacies.map((item) => item.id),
+          ),
           items: [
             const DropdownMenuItem(value: '', child: Text('Tất cả nhà thuốc')),
             ...pharmacies.map(
@@ -276,7 +279,7 @@ class _FilterPanel extends StatelessWidget {
         ),
         const SizedBox(height: 12),
         DropdownButtonFormField<String>(
-          value: _safeValue(productId, products.map((item) => item.id)),
+          initialValue: _safeValue(productId, products.map((item) => item.id)),
           items: [
             const DropdownMenuItem(value: '', child: Text('Tất cả sản phẩm')),
             ...products.map(
@@ -529,7 +532,7 @@ class _InventoryFormSheetState extends State<_InventoryFormSheet> {
             ),
             const SizedBox(height: 16),
             DropdownButtonFormField<String>(
-              value: _safeValue(
+              initialValue: _safeValue(
                 _pharmacyId,
                 pharmacyProvider.allPharmacies.map((item) => item.id),
               ),
@@ -551,7 +554,7 @@ class _InventoryFormSheetState extends State<_InventoryFormSheet> {
             ),
             const SizedBox(height: 12),
             DropdownButtonFormField<String>(
-              value: _safeValue(
+              initialValue: _safeValue(
                 _productId,
                 productProvider.products.map((item) => item.id),
               ),

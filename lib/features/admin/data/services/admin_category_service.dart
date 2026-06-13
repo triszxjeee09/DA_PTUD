@@ -4,7 +4,8 @@ import '../../../../core/constants/api_constants.dart';
 import '../../../../core/errors/api_exception.dart';
 import '../../../../core/network/api_response.dart';
 import '../../../../core/network/dio_client.dart';
-import '../../../category/data/models/category_model.dart';
+import '../../../../core/network/page_response.dart';
+import '../models/admin_category_model.dart';
 import '../models/admin_category_request_model.dart';
 
 class AdminCategoryService {
@@ -14,37 +15,35 @@ class AdminCategoryService {
   static const String _connectionErrorMessage = 'Không thể kết nối đến máy chủ';
   static const String _defaultErrorMessage =
       'Đã có lỗi xảy ra, vui lòng thử lại';
+  static const String _expiredSessionMessage = 'Phiên đăng nhập đã hết hạn';
+  static const String _permissionErrorMessage =
+      'Bạn không có quyền quản lý danh mục';
+  static const String _duplicateSlugMessage = 'Slug danh mục đã tồn tại';
 
   final DioClient _dioClient;
 
-  Future<List<CategoryModel>> getCategories() async {
-    try {
-      final response = await _dioClient.get<dynamic>(
-        ApiConstants.categoryAdmin,
-      );
-      final apiResponse = _parseApiResponse<List<CategoryModel>>(
-        response.data,
-        (json) => _readCategoryList(json),
-      );
+  Future<PageResponse<AdminCategoryModel>> getCategories({
+    int page = 0,
+    int size = 10,
+    String? keyword,
+    bool? isActive,
+  }) async {
+    final queryParameters = <String, dynamic>{
+      'page': page,
+      'size': size,
+      if (keyword != null && keyword.trim().isNotEmpty)
+        'keyword': keyword.trim(),
+      if (isActive != null) 'isActive': isActive,
+    };
 
-      return apiResponse.data ?? const [];
-    } on DioException catch (error) {
-      throw _toApiException(error);
-    } on ApiException {
-      rethrow;
-    } catch (_) {
-      throw const ApiException(_defaultErrorMessage);
-    }
-  }
-
-  Future<CategoryModel> getCategoryDetail(String id) async {
     try {
-      final response = await _dioClient.get<dynamic>(
-        '${ApiConstants.categories}/$id',
+      final response = await _dioClient.dio.get<dynamic>(
+        ApiConstants.adminCategories,
+        queryParameters: queryParameters,
       );
-      final apiResponse = _parseApiResponse<CategoryModel>(
+      final apiResponse = _parseApiResponse<PageResponse<AdminCategoryModel>>(
         response.data,
-        (json) => CategoryModel.fromJson(_asJsonObject(json)),
+        (json) => _readCategoryPage(json, page: page, size: size),
       );
 
       return _requireData(apiResponse);
@@ -57,17 +56,37 @@ class AdminCategoryService {
     }
   }
 
-  Future<CategoryModel> createCategory(
+  Future<AdminCategoryModel> getCategoryById(String id) async {
+    try {
+      final response = await _dioClient.dio.get<dynamic>(
+        '${ApiConstants.categories}/$id',
+      );
+      final apiResponse = _parseApiResponse<AdminCategoryModel>(
+        response.data,
+        (json) => AdminCategoryModel.fromJson(_asJsonObject(json)),
+      );
+
+      return _requireData(apiResponse);
+    } on DioException catch (error) {
+      throw _toApiException(error);
+    } on ApiException {
+      rethrow;
+    } catch (_) {
+      throw const ApiException(_defaultErrorMessage);
+    }
+  }
+
+  Future<AdminCategoryModel> createCategory(
     AdminCategoryRequestModel request,
   ) async {
     try {
-      final response = await _dioClient.post<dynamic>(
+      final response = await _dioClient.dio.post<dynamic>(
         ApiConstants.categories,
         data: request.toJson(),
       );
-      final apiResponse = _parseApiResponse<CategoryModel>(
+      final apiResponse = _parseApiResponse<AdminCategoryModel>(
         response.data,
-        (json) => CategoryModel.fromJson(_asJsonObject(json)),
+        (json) => AdminCategoryModel.fromJson(_asJsonObject(json)),
       );
 
       return _requireData(apiResponse);
@@ -80,18 +99,18 @@ class AdminCategoryService {
     }
   }
 
-  Future<CategoryModel> updateCategory(
+  Future<AdminCategoryModel> updateCategory(
     String id,
     AdminCategoryRequestModel request,
   ) async {
     try {
-      final response = await _dioClient.put<dynamic>(
+      final response = await _dioClient.dio.put<dynamic>(
         '${ApiConstants.categories}/$id',
         data: request.toJson(),
       );
-      final apiResponse = _parseApiResponse<CategoryModel>(
+      final apiResponse = _parseApiResponse<AdminCategoryModel>(
         response.data,
-        (json) => CategoryModel.fromJson(_asJsonObject(json)),
+        (json) => AdminCategoryModel.fromJson(_asJsonObject(json)),
       );
 
       return _requireData(apiResponse);
@@ -106,7 +125,7 @@ class AdminCategoryService {
 
   Future<void> deleteCategory(String id) async {
     try {
-      final response = await _dioClient.delete<dynamic>(
+      final response = await _dioClient.dio.delete<dynamic>(
         '${ApiConstants.categories}/$id',
       );
       final apiResponse = ApiResponse<void>.fromJson(
@@ -116,7 +135,11 @@ class AdminCategoryService {
 
       if (apiResponse.status >= 400) {
         throw ApiException(
-          _messageOrDefault(apiResponse.message),
+          _normalizeErrorMessage(
+            statusCode: apiResponse.status,
+            message:
+                _extractValidationMessage(response.data) ?? apiResponse.message,
+          ),
           statusCode: apiResponse.status,
         );
       }
@@ -133,11 +156,15 @@ class AdminCategoryService {
     Object? data,
     T Function(dynamic json) fromJsonT,
   ) {
-    final response = ApiResponse<T>.fromJson(_asJsonObject(data), fromJsonT);
+    final json = _asJsonObject(data);
+    final response = ApiResponse<T>.fromJson(json, fromJsonT);
 
     if (response.status >= 400) {
       throw ApiException(
-        _messageOrDefault(response.message),
+        _normalizeErrorMessage(
+          statusCode: response.status,
+          message: _extractValidationMessage(json) ?? response.message,
+        ),
         statusCode: response.status,
       );
     }
@@ -149,7 +176,10 @@ class AdminCategoryService {
     final data = response.data;
     if (data == null) {
       throw ApiException(
-        _messageOrDefault(response.message),
+        _normalizeErrorMessage(
+          statusCode: response.status,
+          message: response.message,
+        ),
         statusCode: response.status,
       );
     }
@@ -157,48 +187,161 @@ class AdminCategoryService {
     return data;
   }
 
-  List<CategoryModel> _readCategoryList(Object? data) {
-    final list = data is Map ? _asJsonObject(data)['content'] : data;
-    return _asList(
-      list,
-    ).map((item) => CategoryModel.fromJson(_asJsonObject(item))).toList();
+  PageResponse<AdminCategoryModel> _readCategoryPage(
+    Object? data, {
+    required int page,
+    required int size,
+  }) {
+    if (data is Map) {
+      final json = _asJsonObject(data);
+      if (json.containsKey('content')) {
+        return PageResponse<AdminCategoryModel>.fromJson(
+          json,
+          (item) => AdminCategoryModel.fromJson(_asJsonObject(item)),
+        );
+      }
+    }
+
+    final content = _asList(
+      data,
+    ).map((item) => AdminCategoryModel.fromJson(_asJsonObject(item))).toList();
+    return PageResponse<AdminCategoryModel>(
+      content: content,
+      page: page,
+      size: size,
+      totalElements: content.length,
+      totalPages: 1,
+      last: true,
+    );
   }
 
   ApiException _toApiException(DioException error) {
     final apiException = error.error;
-    if (apiException is ApiException) {
-      return ApiException(
-        _extractBackendMessage(error.response?.data) ?? apiException.message,
-        statusCode: apiException.statusCode,
-      );
-    }
+    final statusCode = error.response?.statusCode;
+    final responseData = error.response?.data;
+    final backendMessage =
+        _extractValidationMessage(responseData) ??
+        _extractBackendMessage(responseData);
 
     if (error.type == DioExceptionType.connectionTimeout ||
         error.type == DioExceptionType.receiveTimeout ||
         error.type == DioExceptionType.sendTimeout ||
         error.type == DioExceptionType.connectionError) {
       return ApiException(
-        _extractBackendMessage(error.response?.data) ?? _connectionErrorMessage,
-        statusCode: error.response?.statusCode,
+        _normalizeErrorMessage(
+          statusCode: statusCode,
+          message: backendMessage ?? _connectionErrorMessage,
+        ),
+        statusCode: statusCode,
+      );
+    }
+
+    if (apiException is ApiException) {
+      return ApiException(
+        _normalizeErrorMessage(
+          statusCode: apiException.statusCode ?? statusCode,
+          message: backendMessage ?? apiException.message,
+        ),
+        statusCode: apiException.statusCode ?? statusCode,
       );
     }
 
     return ApiException(
-      _extractBackendMessage(error.response?.data) ?? _defaultErrorMessage,
-      statusCode: error.response?.statusCode,
+      _normalizeErrorMessage(
+        statusCode: statusCode,
+        message: backendMessage ?? _defaultErrorMessage,
+      ),
+      statusCode: statusCode,
     );
   }
 
-  String _messageOrDefault(String message) {
-    return message.trim().isEmpty ? _defaultErrorMessage : message;
+  String _normalizeErrorMessage({required int? statusCode, String? message}) {
+    if (statusCode == 401) {
+      return _expiredSessionMessage;
+    }
+
+    if (statusCode == 403) {
+      return _permissionErrorMessage;
+    }
+
+    final normalizedMessage = message?.trim();
+    final lowerMessage = normalizedMessage?.toLowerCase() ?? '';
+    if (statusCode == 409 ||
+        (lowerMessage.contains('slug') &&
+            (lowerMessage.contains('exist') ||
+                lowerMessage.contains('duplicate') ||
+                lowerMessage.contains('tồn tại') ||
+                lowerMessage.contains('trùng')))) {
+      return _duplicateSlugMessage;
+    }
+
+    if (normalizedMessage == null ||
+        normalizedMessage.isEmpty ||
+        normalizedMessage.contains('Ãƒ') ||
+        normalizedMessage.contains('Ã„')) {
+      return _defaultErrorMessage;
+    }
+
+    return normalizedMessage;
+  }
+
+  String? _extractValidationMessage(Object? data) {
+    final json = data is Map ? _asJsonObject(data) : null;
+    final validationErrors = json?['validationErrors'];
+
+    if (validationErrors is List) {
+      for (final item in validationErrors) {
+        final message = _validationItemMessage(item);
+        if (message != null) {
+          return message;
+        }
+      }
+    }
+
+    if (validationErrors is Map) {
+      for (final value in validationErrors.values) {
+        final message = _validationItemMessage(value);
+        if (message != null) {
+          return message;
+        }
+      }
+    }
+
+    return null;
+  }
+
+  String? _validationItemMessage(Object? item) {
+    if (item is String && item.trim().isNotEmpty) {
+      return item.trim();
+    }
+
+    if (item is List) {
+      for (final value in item) {
+        final message = _validationItemMessage(value);
+        if (message != null) {
+          return message;
+        }
+      }
+    }
+
+    if (item is Map) {
+      final json = _asJsonObject(item);
+      final message = json['message'] ?? json['error'] ?? json['detail'];
+      if (message is String && message.trim().isNotEmpty) {
+        return message.trim();
+      }
+    }
+
+    return null;
   }
 
   String? _extractBackendMessage(Object? data) {
     final json = data is Map ? _asJsonObject(data) : null;
-    final message = json?['message'];
+    final message =
+        json?['message'] ?? json?['error'] ?? json?['detail'] ?? json?['title'];
 
     if (message is String && message.trim().isNotEmpty) {
-      return message;
+      return message.trim();
     }
 
     return null;

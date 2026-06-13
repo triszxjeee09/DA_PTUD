@@ -4,6 +4,7 @@ import 'main_navigation_screen.dart';
 import '../core/widgets/require_admin.dart';
 import '../features/account/data/models/user_address_model.dart';
 import '../features/account/presentation/screens/add_edit_address_screen.dart';
+import '../features/account/presentation/screens/edit_profile_screen.dart';
 import '../features/account/presentation/screens/select_address_screen.dart';
 import '../features/admin/presentation/screens/admin_activity_log_screen.dart';
 import '../features/admin/presentation/screens/admin_brand_screen.dart';
@@ -11,10 +12,13 @@ import '../features/admin/presentation/screens/admin_brand_form_screen.dart';
 import '../features/admin/presentation/screens/admin_category_screen.dart';
 import '../features/admin/presentation/screens/admin_category_form_screen.dart';
 import '../features/admin/presentation/screens/admin_inventory_screen.dart';
+import '../features/admin/presentation/screens/admin_dashboard_screen.dart';
 import '../features/admin/presentation/screens/admin_main_screen.dart';
 import '../features/admin/presentation/screens/admin_more_screen.dart';
+import '../features/admin/presentation/screens/admin_order_screen.dart';
 import '../features/admin/presentation/screens/admin_pharmacy_form_screen.dart';
 import '../features/admin/presentation/screens/admin_pharmacy_screen.dart';
+import '../features/admin/presentation/screens/admin_prescription_screen.dart';
 import '../features/admin/presentation/screens/admin_product_form_screen.dart';
 import '../features/admin/presentation/screens/admin_product_images_screen.dart';
 import '../features/admin/presentation/screens/admin_product_screen.dart';
@@ -68,6 +72,11 @@ class AppRoutes {
   static const String register = '/register';
   static const String main = '/main';
   static const String admin = '/admin';
+  static const String adminDashboard = '/admin/dashboard';
+  static const String adminProducts = '/admin/products';
+  static const String adminOrders = '/admin/orders';
+  static const String adminOrderDetail = '/admin/orders/detail';
+  static const String adminPrescriptions = '/admin/prescriptions';
   static const String adminCategories = '/admin/categories';
   static const String adminBrands = '/admin/brands';
   static const String adminVouchers = '/admin/vouchers';
@@ -175,6 +184,36 @@ class AppRoutes {
           builder: (_) => _requireAdmin(const AdminMainScreen()),
           settings: settings,
         );
+      case adminDashboard:
+        return MaterialPageRoute(
+          builder: (_) => _requireAdmin(const AdminDashboardScreen()),
+          settings: settings,
+        );
+      case adminProducts:
+        return MaterialPageRoute(
+          builder: (_) => _requireAdmin(const AdminProductScreen()),
+          settings: settings,
+        );
+      case adminOrders:
+        return MaterialPageRoute(
+          builder: (_) => _requireAdmin(const AdminOrderScreen()),
+          settings: settings,
+        );
+      case adminOrderDetail:
+        return MaterialPageRoute(
+          builder: (_) => _requireAdmin(
+            const PlaceholderRouteScreen(
+              title: 'Chi tiết đơn hàng Admin',
+              message: 'Màn hình chi tiết đơn hàng Admin đang được cập nhật.',
+            ),
+          ),
+          settings: settings,
+        );
+      case adminPrescriptions:
+        return MaterialPageRoute(
+          builder: (_) => _requireAdmin(const AdminPrescriptionScreen()),
+          settings: settings,
+        );
       case adminCategories:
         return MaterialPageRoute(
           builder: (_) => _requireAdmin(const AdminCategoryScreen()),
@@ -242,10 +281,14 @@ class AppRoutes {
         );
       case adminCategoryForm:
         final arguments = _readArguments(settings.arguments);
-        return MaterialPageRoute(
+        final rawCategoryId = arguments?['categoryId'];
+        final categoryId = rawCategoryId?.toString().trim();
+        return MaterialPageRoute<bool>(
           builder: (_) => _requireAdmin(
             AdminCategoryFormScreen(
-              categoryId: arguments?['categoryId']?.toString(),
+              categoryId: categoryId == null || categoryId.isEmpty
+                  ? null
+                  : categoryId,
             ),
           ),
           settings: settings,
@@ -260,10 +303,14 @@ class AppRoutes {
         );
       case adminVoucherForm:
         final arguments = _readArguments(settings.arguments);
-        return MaterialPageRoute(
+        final rawVoucherId = arguments?['voucherId'];
+        final voucherId = rawVoucherId?.toString().trim();
+        return MaterialPageRoute<bool>(
           builder: (_) => _requireAdmin(
             AdminVoucherFormScreen(
-              voucherId: arguments?['voucherId']?.toString(),
+              voucherId: voucherId == null || voucherId.isEmpty
+                  ? null
+                  : voucherId,
             ),
           ),
           settings: settings,
@@ -283,12 +330,10 @@ class AppRoutes {
         );
       case adminUserDetail:
         final arguments = _readArguments(settings.arguments);
-        return MaterialPageRoute(
-          builder: (_) => _requireAdmin(
-            AdminUserDetailScreen(
-              userId: arguments?['userId']?.toString() ?? '',
-            ),
-          ),
+        final rawUserId = arguments?['userId'];
+        final userId = rawUserId?.toString().trim() ?? '';
+        return MaterialPageRoute<bool>(
+          builder: (_) => _requireAdmin(AdminUserDetailScreen(userId: userId)),
           settings: settings,
         );
       case pharmacist:
@@ -322,10 +367,7 @@ class AppRoutes {
         );
       case accountProfile:
         return MaterialPageRoute(
-          builder: (_) => const PlaceholderRouteScreen(
-            title: 'Thông tin cá nhân',
-            message: 'Chức năng thông tin cá nhân đang được cập nhật.',
-          ),
+          builder: (_) => const EditProfileScreen(),
           settings: settings,
         );
       case notifications:

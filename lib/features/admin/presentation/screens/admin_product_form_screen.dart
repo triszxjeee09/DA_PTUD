@@ -271,7 +271,7 @@ class _AdminProductFormScreenState extends State<AdminProductFormScreen> {
                     ),
                     _TextInput(controller: _slugController, label: 'Slug'),
                     DropdownButtonFormField<String>(
-                      value: _safeDropdownValue(
+                      initialValue: _safeDropdownValue(
                         _categoryId,
                         categoryProvider.categories.map((item) => item.id),
                       ),
@@ -297,7 +297,7 @@ class _AdminProductFormScreenState extends State<AdminProductFormScreen> {
                           : null,
                     ),
                     DropdownButtonFormField<String>(
-                      value: _safeDropdownValue(
+                      initialValue: _safeDropdownValue(
                         _brandId,
                         brandProvider.brands.map((item) => item.id),
                       ),
@@ -670,7 +670,7 @@ class _SwitchRow extends StatelessWidget {
       value: value,
       onChanged: onChanged,
       title: Text(title),
-      activeColor: AppTheme.primaryBlue,
+      activeThumbColor: AppTheme.primaryBlue,
       contentPadding: EdgeInsets.zero,
     );
   }

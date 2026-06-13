@@ -3,9 +3,10 @@ import 'package:provider/provider.dart';
 
 import '../../../../app/routes.dart';
 import '../../../../app/theme.dart';
+import '../../../../core/utils/date_formatter.dart';
 import '../../../../core/widgets/app_loading.dart';
-import '../../../auth/data/models/user_model.dart';
 import '../../../auth/providers/auth_provider.dart';
+import '../../data/models/admin_user_model.dart';
 import '../../providers/admin_user_provider.dart';
 
 class AdminUserScreen extends StatefulWidget {
@@ -17,9 +18,16 @@ class AdminUserScreen extends StatefulWidget {
 
 class _AdminUserScreenState extends State<AdminUserScreen> {
   final _searchController = TextEditingController();
+  final _scrollController = ScrollController();
   String? _status;
   String? _role;
   bool _didStart = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _scrollController.addListener(_handleScroll);
+  }
 
   @override
   void didChangeDependencies() {
@@ -35,32 +43,65 @@ class _AdminUserScreenState extends State<AdminUserScreen> {
         return;
       }
 
-      context.read<AdminUserProvider>().loadUsers();
+      _refreshUsers();
     });
   }
 
   @override
   void dispose() {
+    _scrollController.removeListener(_handleScroll);
+    _scrollController.dispose();
     _searchController.dispose();
     super.dispose();
   }
 
-  Future<void> _applyFilters() {
+  void _handleScroll() {
+    if (!_scrollController.hasClients) {
+      return;
+    }
+
+    final position = _scrollController.position;
+    if (position.extentAfter > 260) {
+      return;
+    }
+
+    final provider = context.read<AdminUserProvider>();
+    if (provider.hasMore &&
+        !provider.isLoading &&
+        !provider.isLoadingMore &&
+        provider.users.isNotEmpty) {
+      provider.loadUsers();
+    }
+  }
+
+  Future<void> _refreshUsers() {
     return context.read<AdminUserProvider>().loadUsers(
+      refresh: true,
       keyword: _searchController.text,
       status: _status ?? '',
       role: _role ?? '',
     );
   }
 
-  Future<void> _openDetail(UserModel user) async {
-    final shouldRefresh = await Navigator.of(context).pushNamed<bool>(
-      AppRoutes.adminUserDetail,
-      arguments: {'userId': user.id},
-    );
+  Future<void> _openDetail(AdminUserModel user) async {
+    final userId = user.id.trim();
+    if (userId.isEmpty) {
+      if (!mounted) {
+        return;
+      }
 
-    if (shouldRefresh == true && mounted) {
-      await context.read<AdminUserProvider>().loadUsers();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Không tìm thấy mã người dùng')),
+      );
+      return;
+    }
+
+    final result = await Navigator.of(
+      context,
+    ).pushNamed<bool>(AppRoutes.adminUserDetail, arguments: {'userId': userId});
+
+    if (result == true && mounted) {
+      await _refreshUsers();
     }
   }
 
@@ -75,13 +116,23 @@ class _AdminUserScreenState extends State<AdminUserScreen> {
     }
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Quản lý người dùng')),
+      appBar: AppBar(
+        title: const Text('Quản lý người dùng'),
+        actions: [
+          IconButton(
+            tooltip: 'Làm mới',
+            onPressed: _refreshUsers,
+            icon: const Icon(Icons.refresh_rounded),
+          ),
+        ],
+      ),
       body: Consumer<AdminUserProvider>(
         builder: (context, provider, child) {
           return RefreshIndicator(
             color: AppTheme.primaryBlue,
-            onRefresh: () => provider.loadUsers(),
+            onRefresh: _refreshUsers,
             child: ListView(
+              controller: _scrollController,
               padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
               children: [
                 _UserFilters(
@@ -91,13 +142,13 @@ class _AdminUserScreenState extends State<AdminUserScreen> {
                   isLoading: provider.isLoading,
                   onStatusChanged: (value) {
                     setState(() => _status = _emptyToNull(value));
-                    _applyFilters();
+                    _refreshUsers();
                   },
                   onRoleChanged: (value) {
                     setState(() => _role = _emptyToNull(value));
-                    _applyFilters();
+                    _refreshUsers();
                   },
-                  onSearch: _applyFilters,
+                  onSearch: _refreshUsers,
                   onChanged: () => setState(() {}),
                 ),
                 const SizedBox(height: 16),
@@ -110,7 +161,7 @@ class _AdminUserScreenState extends State<AdminUserScreen> {
                     provider.users.isEmpty)
                   _UserErrorView(
                     message: provider.errorMessage!,
-                    onRetry: () => provider.loadUsers(),
+                    onRetry: _refreshUsers,
                   )
                 else if (provider.users.isEmpty)
                   const _UserEmptyView()
@@ -130,7 +181,7 @@ class _AdminUserScreenState extends State<AdminUserScreen> {
                     ),
                   ),
                   const SizedBox(height: 8),
-                  _PaginationBar(provider: provider),
+                  _LoadMoreIndicator(provider: provider),
                 ],
               ],
             ),
@@ -179,16 +230,26 @@ class _UserFilters extends StatelessWidget {
           decoration: InputDecoration(
             hintText: 'Tìm tên, email, số điện thoại',
             prefixIcon: const Icon(Icons.search_rounded),
-            suffixIcon: searchController.text.isEmpty
-                ? null
-                : IconButton(
+            suffixIcon: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (searchController.text.isNotEmpty)
+                  IconButton(
                     tooltip: 'Xóa tìm kiếm',
                     onPressed: () {
                       searchController.clear();
+                      onChanged();
                       onSearch();
                     },
                     icon: const Icon(Icons.close_rounded),
                   ),
+                IconButton(
+                  tooltip: 'Tìm kiếm',
+                  onPressed: isLoading ? null : onSearch,
+                  icon: const Icon(Icons.search_rounded),
+                ),
+              ],
+            ),
           ),
           onChanged: (_) => onChanged(),
         ),
@@ -197,12 +258,18 @@ class _UserFilters extends StatelessWidget {
           children: [
             Expanded(
               child: DropdownButtonFormField<String>(
-                value: status ?? '',
+                initialValue: status ?? '',
                 items: const [
-                  DropdownMenuItem(value: '', child: Text('Tất cả trạng thái')),
-                  DropdownMenuItem(value: 'ACTIVE', child: Text('ACTIVE')),
-                  DropdownMenuItem(value: 'INACTIVE', child: Text('INACTIVE')),
-                  DropdownMenuItem(value: 'BLOCKED', child: Text('BLOCKED')),
+                  DropdownMenuItem(value: '', child: Text('Tất cả')),
+                  DropdownMenuItem(
+                    value: 'ACTIVE',
+                    child: Text('Đang hoạt động'),
+                  ),
+                  DropdownMenuItem(
+                    value: 'INACTIVE',
+                    child: Text('Ngừng hoạt động'),
+                  ),
+                  DropdownMenuItem(value: 'BLOCKED', child: Text('Đã khóa')),
                 ],
                 onChanged: isLoading ? null : onStatusChanged,
                 decoration: const InputDecoration(labelText: 'Trạng thái'),
@@ -211,15 +278,18 @@ class _UserFilters extends StatelessWidget {
             const SizedBox(width: 10),
             Expanded(
               child: DropdownButtonFormField<String>(
-                value: role ?? '',
+                initialValue: role ?? '',
                 items: const [
-                  DropdownMenuItem(value: '', child: Text('Tất cả vai trò')),
-                  DropdownMenuItem(value: 'CUSTOMER', child: Text('CUSTOMER')),
-                  DropdownMenuItem(value: 'ADMIN', child: Text('ADMIN')),
+                  DropdownMenuItem(value: '', child: Text('Tất cả')),
                   DropdownMenuItem(
-                    value: 'PHARMACIST',
-                    child: Text('PHARMACIST'),
+                    value: 'CUSTOMER',
+                    child: Text('Khách hàng'),
                   ),
+                  DropdownMenuItem(
+                    value: 'ADMIN',
+                    child: Text('Quản trị viên'),
+                  ),
+                  DropdownMenuItem(value: 'PHARMACIST', child: Text('Dược sĩ')),
                 ],
                 onChanged: isLoading ? null : onRoleChanged,
                 decoration: const InputDecoration(labelText: 'Vai trò'),
@@ -235,7 +305,7 @@ class _UserFilters extends StatelessWidget {
 class _UserCard extends StatelessWidget {
   const _UserCard({required this.user, required this.onDetail});
 
-  final UserModel user;
+  final AdminUserModel user;
   final VoidCallback onDetail;
 
   @override
@@ -248,8 +318,10 @@ class _UserCard extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 CircleAvatar(
+                  radius: 24,
                   backgroundColor: AppTheme.lightBlue,
                   backgroundImage: user.avatarUrl?.trim().isNotEmpty == true
                       ? NetworkImage(user.avatarUrl!)
@@ -272,28 +344,44 @@ class _UserCard extends StatelessWidget {
                             ?.copyWith(fontWeight: FontWeight.w800),
                       ),
                       const SizedBox(height: 3),
-                      Text(_fallback(user.email, 'Chưa có email')),
+                      Text(
+                        _fallback(user.email, 'Chưa có email'),
+                        style: const TextStyle(color: AppTheme.textSecondary),
+                      ),
                     ],
                   ),
                 ),
                 _StatusChip(status: user.status),
               ],
             ),
-            const SizedBox(height: 10),
-            Text('Số điện thoại: ${_fallback(user.phone, 'Chưa có')}'),
+            const SizedBox(height: 12),
+            _InfoLine(
+              icon: Icons.phone_rounded,
+              text: 'Số điện thoại: ${_fallback(user.phone, 'Chưa có')}',
+            ),
+            const SizedBox(height: 8),
+            _InfoLine(
+              icon: Icons.calendar_month_rounded,
+              text: 'Ngày tạo: ${_formatCreatedAt(user.createdAt)}',
+            ),
             const SizedBox(height: 10),
             Wrap(
               spacing: 8,
               runSpacing: 8,
               children: user.roles.isEmpty
                   ? [const Chip(label: Text('Chưa có vai trò'))]
-                  : user.roles.map((role) => Chip(label: Text(role))).toList(),
+                  : user.roles
+                        .map((role) => Chip(label: Text(_roleLabel(role))))
+                        .toList(),
             ),
             const SizedBox(height: 12),
-            OutlinedButton.icon(
-              onPressed: onDetail,
-              icon: const Icon(Icons.info_outline_rounded),
-              label: const Text('Chi tiết'),
+            Align(
+              alignment: Alignment.centerRight,
+              child: OutlinedButton.icon(
+                onPressed: onDetail,
+                icon: const Icon(Icons.info_outline_rounded),
+                label: const Text('Chi tiết'),
+              ),
             ),
           ],
         ),
@@ -305,6 +393,47 @@ class _UserCard extends StatelessWidget {
     final text = value?.trim();
     return text == null || text.isEmpty ? fallback : text;
   }
+
+  String _formatCreatedAt(DateTime? value) {
+    return value == null ? 'Chưa có' : DateFormatter.formatDateTime(value);
+  }
+
+  String _roleLabel(String role) {
+    final normalized = role.trim().toUpperCase();
+    final value = normalized.startsWith('ROLE_')
+        ? normalized.substring('ROLE_'.length)
+        : normalized;
+
+    switch (value) {
+      case 'CUSTOMER':
+        return 'Khách hàng';
+      case 'ADMIN':
+        return 'Quản trị viên';
+      case 'PHARMACIST':
+        return 'Dược sĩ';
+      default:
+        return role;
+    }
+  }
+}
+
+class _InfoLine extends StatelessWidget {
+  const _InfoLine({required this.icon, required this.text});
+
+  final IconData icon;
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(icon, size: 18, color: AppTheme.textSecondary),
+        const SizedBox(width: 8),
+        Expanded(child: Text(text)),
+      ],
+    );
+  }
 }
 
 class _StatusChip extends StatelessWidget {
@@ -315,57 +444,66 @@ class _StatusChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final normalized = status?.trim().toUpperCase() ?? 'INACTIVE';
-    final isActive = normalized == 'ACTIVE';
-    final color = normalized == 'BLOCKED'
-        ? AppTheme.error
-        : isActive
-        ? AppTheme.success
-        : AppTheme.textSecondary;
+    final color = switch (normalized) {
+      'ACTIVE' => AppTheme.success,
+      'BLOCKED' => AppTheme.error,
+      _ => AppTheme.textSecondary,
+    };
 
     return Chip(
-      label: Text(normalized),
+      label: Text(_statusLabel(normalized)),
       visualDensity: VisualDensity.compact,
       backgroundColor: color.withValues(alpha: 0.12),
       labelStyle: TextStyle(color: color, fontWeight: FontWeight.w800),
     );
   }
+
+  String _statusLabel(String status) {
+    switch (status) {
+      case 'ACTIVE':
+        return 'Đang hoạt động';
+      case 'INACTIVE':
+        return 'Ngừng hoạt động';
+      case 'BLOCKED':
+        return 'Đã khóa';
+      default:
+        return status;
+    }
+  }
 }
 
-class _PaginationBar extends StatelessWidget {
-  const _PaginationBar({required this.provider});
+class _LoadMoreIndicator extends StatelessWidget {
+  const _LoadMoreIndicator({required this.provider});
 
   final AdminUserProvider provider;
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      children: [
-        IconButton.outlined(
-          onPressed: provider.isLoading || provider.isFirstPage
-              ? null
-              : provider.previousPage,
-          icon: const Icon(Icons.chevron_left_rounded),
-          tooltip: 'Trang trước',
-        ),
-        Expanded(
-          child: Text(
-            'Trang ${provider.page + 1}/${provider.totalPages} - ${provider.totalElements} người dùng',
-            textAlign: TextAlign.center,
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-              color: AppTheme.textSecondary,
-              fontWeight: FontWeight.w700,
-            ),
+    if (provider.isLoadingMore) {
+      return const Padding(
+        padding: EdgeInsets.symmetric(vertical: 12),
+        child: Center(
+          child: SizedBox(
+            width: 24,
+            height: 24,
+            child: CircularProgressIndicator(strokeWidth: 2),
           ),
         ),
-        IconButton.outlined(
-          onPressed: provider.isLoading || provider.isLastPage
-              ? null
-              : provider.nextPage,
-          icon: const Icon(Icons.chevron_right_rounded),
-          tooltip: 'Trang sau',
+      );
+    }
+
+    if (!provider.hasMore) {
+      return Text(
+        'Đã tải hết danh sách người dùng',
+        textAlign: TextAlign.center,
+        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+          color: AppTheme.textSecondary,
+          fontWeight: FontWeight.w700,
         ),
-      ],
-    );
+      );
+    }
+
+    return const SizedBox(height: 24);
   }
 }
 
@@ -411,7 +549,7 @@ class _UserEmptyView extends StatelessWidget {
     return const SizedBox(
       height: 320,
       child: Center(
-        child: Text('Chưa có người dùng phù hợp.', textAlign: TextAlign.center),
+        child: Text('Không có người dùng nào', textAlign: TextAlign.center),
       ),
     );
   }

@@ -1,191 +1,365 @@
 import 'package:flutter/foundation.dart';
 
 import '../../../core/errors/api_exception.dart';
-import '../../auth/data/models/user_model.dart';
+import '../data/models/admin_user_model.dart';
 import '../data/services/admin_user_service.dart';
 
 class AdminUserProvider extends ChangeNotifier {
   AdminUserProvider({AdminUserService? adminUserService})
     : _adminUserService = adminUserService ?? AdminUserService();
 
+  static const int _pageSize = 10;
   static const String _defaultErrorMessage =
       'Đã có lỗi xảy ra, vui lòng thử lại';
 
   final AdminUserService _adminUserService;
 
-  List<UserModel> _users = const [];
-  UserModel? _selectedUser;
+  final List<AdminUserModel> _users = [];
+  AdminUserModel? _selectedUser;
   bool _isLoading = false;
-  bool _isLoadingDetail = false;
-  bool _isUpdating = false;
+  bool _isLoadingMore = false;
+  bool _isUpdatingStatus = false;
+  bool _isUpdatingRole = false;
+  bool _isBlockingUser = false;
+  bool _isUnlockingUser = false;
+  bool _isAssigningRole = false;
+  bool _isRemovingRole = false;
+  bool _isResettingPassword = false;
+  bool _isDeactivatingUser = false;
   String? _errorMessage;
-  String _keyword = '';
-  String? _status;
-  String? _role;
-  int _page = 0;
-  int _size = 20;
-  int _totalPages = 1;
-  int _totalElements = 0;
-  bool _isLast = true;
+  int _currentPage = 0;
+  bool _hasMore = true;
+  String? _currentKeyword;
+  String? _currentStatusFilter;
+  String? _currentRoleFilter;
 
-  List<UserModel> get users => _users;
-  UserModel? get selectedUser => _selectedUser;
+  List<AdminUserModel> get users => List.unmodifiable(_users);
+  AdminUserModel? get selectedUser => _selectedUser;
   bool get isLoading => _isLoading;
-  bool get isLoadingDetail => _isLoadingDetail;
-  bool get isUpdating => _isUpdating;
+  bool get isLoadingMore => _isLoadingMore;
+  bool get isUpdatingStatus => _isUpdatingStatus;
+  bool get isUpdatingRole => _isUpdatingRole;
+  bool get isBlockingUser => _isBlockingUser;
+  bool get isUnlockingUser => _isUnlockingUser;
+  bool get isAssigningRole => _isAssigningRole;
+  bool get isRemovingRole => _isRemovingRole;
+  bool get isResettingPassword => _isResettingPassword;
+  bool get isDeactivatingUser => _isDeactivatingUser;
   String? get errorMessage => _errorMessage;
-  String get keyword => _keyword;
-  String? get status => _status;
-  String? get role => _role;
-  int get page => _page;
-  int get totalPages => _totalPages;
-  int get totalElements => _totalElements;
-  bool get isFirstPage => _page <= 0;
-  bool get isLastPage => _isLast || _page >= _totalPages - 1;
+  int get currentPage => _currentPage;
+  bool get hasMore => _hasMore;
+  String? get currentKeyword => _currentKeyword;
+  String? get currentStatusFilter => _currentStatusFilter;
+  String? get currentRoleFilter => _currentRoleFilter;
 
   Future<void> loadUsers({
+    bool refresh = false,
     String? keyword,
     String? status,
     String? role,
-    int? page,
   }) async {
-    if (keyword != null) {
-      _keyword = keyword.trim();
-      _page = 0;
-    }
-    if (status != null) {
-      _status = _emptyToNull(status);
-      _page = 0;
-    }
-    if (role != null) {
-      _role = _emptyToNull(role);
-      _page = 0;
-    }
-    if (page != null) {
-      _page = page < 0 ? 0 : page;
+    if (_isLoading || _isLoadingMore) {
+      return;
     }
 
-    _setLoading(true);
+    if (refresh) {
+      _currentPage = 0;
+      _users.clear();
+      _hasMore = true;
+      _currentKeyword = keyword == null
+          ? _currentKeyword
+          : _emptyToNull(keyword);
+      _currentStatusFilter = status == null
+          ? _currentStatusFilter
+          : _emptyToNull(status);
+      _currentRoleFilter = role == null
+          ? _currentRoleFilter
+          : _emptyToNull(role);
+    } else {
+      _currentKeyword = keyword == null
+          ? _currentKeyword
+          : _emptyToNull(keyword);
+      _currentStatusFilter = status == null
+          ? _currentStatusFilter
+          : _emptyToNull(status);
+      _currentRoleFilter = role == null
+          ? _currentRoleFilter
+          : _emptyToNull(role);
+    }
+
+    if (!_hasMore) {
+      notifyListeners();
+      return;
+    }
+
+    final isFirstPage = _currentPage == 0;
+    _errorMessage = null;
+    _setListLoading(isFirstPage: isFirstPage, value: true);
 
     try {
-      final result = await _adminUserService.getUsers(
-        keyword: _keyword,
-        status: _status,
-        role: _role,
-        page: _page,
-        size: _size,
+      debugPrint(
+        'AdminUserProvider: load users page=$_currentPage, '
+        'keyword=${_currentKeyword ?? '-'}, '
+        'status=${_currentStatusFilter ?? '-'}, '
+        'role=${_currentRoleFilter ?? '-'}',
       );
-      _users = result.content;
-      _page = result.page;
-      _size = result.size == 0 ? _size : result.size;
-      _totalPages = result.totalPages == 0 ? 1 : result.totalPages;
-      _totalElements = result.totalElements;
-      _isLast = result.last;
+
+      final result = await _adminUserService.getUsers(
+        page: _currentPage,
+        size: _pageSize,
+        keyword: _currentKeyword,
+        status: _currentStatusFilter,
+        role: _currentRoleFilter,
+      );
+
+      _appendUniqueUsers(result.content);
+      _currentPage = result.page >= _currentPage
+          ? result.page + 1
+          : _currentPage + 1;
+      _hasMore = !result.last;
       _errorMessage = null;
     } catch (error) {
       _errorMessage = _readErrorMessage(error);
     } finally {
-      _setLoading(false);
+      _setListLoading(isFirstPage: isFirstPage, value: false);
     }
   }
 
-  Future<void> nextPage() {
-    if (isLastPage) {
-      return Future.value();
+  Future<void> loadUserDetail(String userId) async {
+    final normalizedUserId = userId.trim();
+    if (normalizedUserId.isEmpty) {
+      _errorMessage = 'Không tìm thấy mã người dùng';
+      notifyListeners();
+      return;
     }
 
-    return loadUsers(page: _page + 1);
-  }
-
-  Future<void> previousPage() {
-    if (isFirstPage) {
-      return Future.value();
-    }
-
-    return loadUsers(page: _page - 1);
-  }
-
-  Future<UserModel?> loadUserDetail(String userId) async {
-    _setLoadingDetail(true);
+    _isLoading = true;
+    _errorMessage = null;
+    notifyListeners();
 
     try {
-      _selectedUser = await _adminUserService.getUserDetail(userId);
-      _replaceUser(_selectedUser!);
-      _errorMessage = null;
-      return _selectedUser;
-    } catch (error) {
-      _errorMessage = _readErrorMessage(error);
-      return null;
-    } finally {
-      _setLoadingDetail(false);
-    }
-  }
-
-  Future<bool> updateStatus(String userId, String status) async {
-    return _runUserUpdate(() => _adminUserService.updateStatus(userId, status));
-  }
-
-  Future<bool> addRole(String userId, String roleName) async {
-    return _runUserUpdate(() => _adminUserService.addRole(userId, roleName));
-  }
-
-  Future<bool> removeRole(String userId, String roleName) async {
-    return _runUserUpdate(() => _adminUserService.removeRole(userId, roleName));
-  }
-
-  Future<bool> _runUserUpdate(Future<UserModel> Function() action) async {
-    _setUpdating(true);
-
-    try {
-      final user = await action();
+      final user = await _adminUserService.getUserById(normalizedUserId);
       _selectedUser = user;
       _replaceUser(user);
+      _errorMessage = null;
+    } catch (error) {
+      _errorMessage = _readErrorMessage(error);
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  Future<bool> updateUserStatus({
+    required String userId,
+    required String status,
+  }) async {
+    final normalizedUserId = userId.trim();
+    final normalizedStatus = status.trim();
+    if (normalizedUserId.isEmpty || normalizedStatus.isEmpty) {
+      _errorMessage = 'Dữ liệu người dùng không hợp lệ';
+      notifyListeners();
+      return false;
+    }
+
+    _isUpdatingStatus = true;
+    _errorMessage = null;
+    notifyListeners();
+
+    try {
+      final user = await _adminUserService.updateUserStatus(
+        userId: normalizedUserId,
+        status: normalizedStatus,
+      );
+      _applyUpdatedUser(user);
       _errorMessage = null;
       return true;
     } catch (error) {
       _errorMessage = _readErrorMessage(error);
-      notifyListeners();
       return false;
     } finally {
-      _setUpdating(false);
+      _isUpdatingStatus = false;
+      notifyListeners();
     }
   }
 
-  void _replaceUser(UserModel user) {
-    _users = _users.map((item) => item.id == user.id ? user : item).toList();
-    notifyListeners();
+  Future<bool> blockUser(String userId) {
+    return _runUserMutation(
+      userId: userId,
+      setLoading: (value) => _isBlockingUser = value,
+      action: (normalizedUserId) =>
+          _adminUserService.blockUser(normalizedUserId),
+    );
   }
 
-  void _setLoading(bool value) {
-    if (_isLoading == value) {
-      return;
+  Future<bool> unlockUser(String userId) {
+    return _runUserMutation(
+      userId: userId,
+      setLoading: (value) => _isUnlockingUser = value,
+      action: (normalizedUserId) =>
+          _adminUserService.unlockUser(normalizedUserId),
+    );
+  }
+
+  Future<bool> assignRole(String userId, String roleName) {
+    return _runUserMutation(
+      userId: userId,
+      setLoading: (value) {
+        _isAssigningRole = value;
+        _isUpdatingRole = value;
+      },
+      action: (normalizedUserId) => _adminUserService.assignRole(
+        userId: normalizedUserId,
+        roleName: roleName.trim(),
+      ),
+    );
+  }
+
+  Future<bool> removeRole(String userId, String roleName) {
+    return _runUserMutation(
+      userId: userId,
+      setLoading: (value) {
+        _isRemovingRole = value;
+        _isUpdatingRole = value;
+      },
+      action: (normalizedUserId) => _adminUserService.removeRole(
+        userId: normalizedUserId,
+        roleName: roleName.trim(),
+      ),
+    );
+  }
+
+  Future<bool> resetPassword(
+    String userId,
+    String newPassword,
+    String confirmPassword,
+  ) {
+    return _runUserMutation(
+      userId: userId,
+      setLoading: (value) => _isResettingPassword = value,
+      action: (normalizedUserId) => _adminUserService.resetPassword(
+        userId: normalizedUserId,
+        newPassword: newPassword,
+        confirmPassword: confirmPassword,
+      ),
+    );
+  }
+
+  Future<bool> deactivateUser(String userId) async {
+    final normalizedUserId = userId.trim();
+    if (normalizedUserId.isEmpty) {
+      _errorMessage = 'Không tìm thấy mã người dùng';
+      notifyListeners();
+      return false;
     }
 
-    _isLoading = value;
+    _isDeactivatingUser = true;
+    _errorMessage = null;
+    notifyListeners();
+
+    try {
+      await _adminUserService.deactivateUser(normalizedUserId);
+      _removeUser(normalizedUserId);
+      if (_selectedUser?.id == normalizedUserId) {
+        _selectedUser = null;
+      }
+      _errorMessage = null;
+      return true;
+    } catch (error) {
+      _errorMessage = _readErrorMessage(error);
+      return false;
+    } finally {
+      _isDeactivatingUser = false;
+      notifyListeners();
+    }
+  }
+
+  void clearSelectedUser() {
+    _selectedUser = null;
     notifyListeners();
   }
 
-  void _setLoadingDetail(bool value) {
-    if (_isLoadingDetail == value) {
-      return;
+  void clearError() {
+    _errorMessage = null;
+    notifyListeners();
+  }
+
+  Future<bool> _runUserMutation({
+    required String userId,
+    required ValueChanged<bool> setLoading,
+    required Future<AdminUserModel?> Function(String userId) action,
+  }) async {
+    final normalizedUserId = userId.trim();
+    if (normalizedUserId.isEmpty) {
+      _errorMessage = 'Không tìm thấy mã người dùng';
+      notifyListeners();
+      return false;
     }
 
-    _isLoadingDetail = value;
+    setLoading(true);
+    _errorMessage = null;
     notifyListeners();
-  }
 
-  void _setUpdating(bool value) {
-    if (_isUpdating == value) {
-      return;
+    try {
+      final user = await action(normalizedUserId);
+      if (user != null) {
+        _applyUpdatedUser(user);
+      } else {
+        await _loadUserDetailSilently(normalizedUserId);
+      }
+      _errorMessage = null;
+      return true;
+    } catch (error) {
+      _errorMessage = _readErrorMessage(error);
+      return false;
+    } finally {
+      setLoading(false);
+      notifyListeners();
     }
+  }
 
-    _isUpdating = value;
+  Future<void> _loadUserDetailSilently(String userId) async {
+    final user = await _adminUserService.getUserById(userId);
+    _applyUpdatedUser(user);
+  }
+
+  void _applyUpdatedUser(AdminUserModel user) {
+    _selectedUser = user;
+    _replaceUser(user);
+  }
+
+  void _replaceUser(AdminUserModel user) {
+    final index = _users.indexWhere((item) => item.id == user.id);
+    if (index >= 0) {
+      _users[index] = user;
+    }
+  }
+
+  void _removeUser(String userId) {
+    _users.removeWhere((item) => item.id == userId);
+  }
+
+  void _appendUniqueUsers(List<AdminUserModel> users) {
+    final existingIds = _users.map((user) => user.id).toSet();
+    for (final user in users) {
+      if (user.id.isEmpty || existingIds.add(user.id)) {
+        _users.add(user);
+      }
+    }
+  }
+
+  void _setListLoading({required bool isFirstPage, required bool value}) {
+    if (isFirstPage) {
+      _isLoading = value;
+    } else {
+      _isLoadingMore = value;
+    }
     notifyListeners();
   }
 
-  String? _emptyToNull(String value) {
-    final text = value.trim();
-    return text.isEmpty ? null : text;
+  String? _emptyToNull(String? value) {
+    final text = value?.trim();
+    return text == null || text.isEmpty ? null : text;
   }
 
   String _readErrorMessage(Object error) {

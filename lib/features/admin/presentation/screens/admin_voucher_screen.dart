@@ -7,7 +7,7 @@ import '../../../../core/utils/currency_formatter.dart';
 import '../../../../core/utils/date_formatter.dart';
 import '../../../../core/widgets/app_loading.dart';
 import '../../../auth/providers/auth_provider.dart';
-import '../../../voucher/data/models/voucher_model.dart';
+import '../../data/models/admin_voucher_model.dart';
 import '../../providers/admin_voucher_provider.dart';
 
 class AdminVoucherScreen extends StatefulWidget {
@@ -19,7 +19,23 @@ class AdminVoucherScreen extends StatefulWidget {
 
 class _AdminVoucherScreenState extends State<AdminVoucherScreen> {
   final _searchController = TextEditingController();
+  final _scrollController = ScrollController();
+  String _statusFilter = 'all';
   bool _didStart = false;
+
+  bool? get _isActiveFilter {
+    return switch (_statusFilter) {
+      'active' => true,
+      'inactive' => false,
+      _ => null,
+    };
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _scrollController.addListener(_loadMoreIfNeeded);
+  }
 
   @override
   void didChangeDependencies() {
@@ -35,52 +51,91 @@ class _AdminVoucherScreenState extends State<AdminVoucherScreen> {
         return;
       }
 
-      context.read<AdminVoucherProvider>().loadVouchers();
+      _loadVouchers(refresh: true);
     });
   }
 
   @override
   void dispose() {
+    _scrollController.removeListener(_loadMoreIfNeeded);
+    _scrollController.dispose();
     _searchController.dispose();
     super.dispose();
   }
 
+  Future<void> _loadVouchers({required bool refresh}) {
+    return context.read<AdminVoucherProvider>().loadVouchers(
+      refresh: refresh,
+      keyword: _searchController.text,
+      isActive: _isActiveFilter,
+    );
+  }
+
+  void _loadMoreIfNeeded() {
+    if (!_scrollController.hasClients) {
+      return;
+    }
+
+    final position = _scrollController.position;
+    if (position.extentAfter > 420) {
+      return;
+    }
+
+    final provider = context.read<AdminVoucherProvider>();
+    if (!provider.hasMore ||
+        provider.isLoading ||
+        provider.isLoadingMore ||
+        provider.isDeleting) {
+      return;
+    }
+
+    _loadVouchers(refresh: false);
+  }
+
   Future<void> _openForm({String? voucherId}) async {
+    final normalizedVoucherId = voucherId?.trim();
+    if (voucherId != null &&
+        (normalizedVoucherId == null || normalizedVoucherId.isEmpty)) {
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Không tìm thấy mã voucher')),
+      );
+      return;
+    }
+
     final shouldRefresh = await Navigator.of(context).pushNamed<bool>(
       AppRoutes.adminVoucherForm,
-      arguments: voucherId == null ? null : {'voucherId': voucherId},
+      arguments: normalizedVoucherId == null
+          ? null
+          : {'voucherId': normalizedVoucherId},
     );
 
     if (!mounted || shouldRefresh != true) {
       return;
     }
 
-    await context.read<AdminVoucherProvider>().loadVouchers();
+    await _loadVouchers(refresh: true);
   }
 
-  Future<void> _submitSearch() {
-    return context.read<AdminVoucherProvider>().loadVouchers(
-      keyword: _searchController.text,
-    );
-  }
-
-  Future<void> _confirmDelete(VoucherModel voucher) async {
+  Future<void> _confirmDelete(AdminVoucherModel voucher) async {
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (context) {
+      builder: (dialogContext) {
         return AlertDialog(
-          title: const Text('Ẩn voucher'),
-          content: Text(
-            'Bạn có chắc chắn muốn ẩn voucher "${voucher.code}" không?',
-          ),
+          title: const Text('Xóa voucher'),
+          content: const Text('Bạn có chắc chắn muốn xóa voucher này không?'),
           actions: [
             TextButton(
-              onPressed: () => Navigator.of(context).pop(false),
+              onPressed: () => Navigator.of(dialogContext).pop(false),
               child: const Text('Hủy'),
             ),
             FilledButton(
-              onPressed: () => Navigator.of(context).pop(true),
-              child: const Text('Ẩn'),
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              style: FilledButton.styleFrom(backgroundColor: AppTheme.error),
+              child: const Text('Xóa'),
             ),
           ],
         );
@@ -102,8 +157,8 @@ class _AdminVoucherScreenState extends State<AdminVoucherScreen> {
       SnackBar(
         content: Text(
           success
-              ? 'Đã ẩn voucher'
-              : provider.errorMessage ?? 'Không thể ẩn voucher.',
+              ? 'Xóa voucher thành công'
+              : provider.errorMessage ?? 'Không thể xóa voucher',
         ),
       ),
     );
@@ -120,20 +175,35 @@ class _AdminVoucherScreenState extends State<AdminVoucherScreen> {
     }
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Quản lý voucher')),
+      appBar: AppBar(
+        title: const Text('Quản lý voucher'),
+        actions: [
+          IconButton(
+            tooltip: 'Làm mới',
+            onPressed: () => _loadVouchers(refresh: true),
+            icon: const Icon(Icons.refresh_rounded),
+          ),
+        ],
+      ),
       body: Consumer<AdminVoucherProvider>(
         builder: (context, provider, child) {
           return RefreshIndicator(
             color: AppTheme.primaryBlue,
-            onRefresh: () => provider.loadVouchers(),
+            onRefresh: () => _loadVouchers(refresh: true),
             child: ListView(
+              controller: _scrollController,
               padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
               children: [
                 _VoucherToolbar(
                   controller: _searchController,
+                  selectedFilter: _statusFilter,
                   isLoading: provider.isLoading,
-                  onSearch: _submitSearch,
-                  onChanged: () => setState(() {}),
+                  onSearch: () => _loadVouchers(refresh: true),
+                  onFilterChanged: (value) {
+                    setState(() => _statusFilter = value);
+                    _loadVouchers(refresh: true);
+                  },
+                  onTextChanged: () => setState(() {}),
                   onAdd: () => _openForm(),
                 ),
                 const SizedBox(height: 16),
@@ -146,12 +216,14 @@ class _AdminVoucherScreenState extends State<AdminVoucherScreen> {
                     provider.vouchers.isEmpty)
                   _VoucherErrorView(
                     message: provider.errorMessage!,
-                    onRetry: () => provider.loadVouchers(),
+                    onRetry: () => _loadVouchers(refresh: true),
                   )
                 else if (provider.vouchers.isEmpty)
                   const _VoucherEmptyView()
                 else ...[
-                  if (provider.isLoading || provider.isDeleting)
+                  if (provider.isLoading ||
+                      provider.isLoadingMore ||
+                      provider.isDeleting)
                     const Padding(
                       padding: EdgeInsets.only(bottom: 12),
                       child: LinearProgressIndicator(
@@ -168,7 +240,7 @@ class _AdminVoucherScreenState extends State<AdminVoucherScreen> {
                     ),
                   ),
                   const SizedBox(height: 8),
-                  _PaginationBar(provider: provider),
+                  _LoadMoreFooter(provider: provider),
                 ],
               ],
             ),
@@ -182,16 +254,20 @@ class _AdminVoucherScreenState extends State<AdminVoucherScreen> {
 class _VoucherToolbar extends StatelessWidget {
   const _VoucherToolbar({
     required this.controller,
+    required this.selectedFilter,
     required this.isLoading,
     required this.onSearch,
-    required this.onChanged,
+    required this.onFilterChanged,
+    required this.onTextChanged,
     required this.onAdd,
   });
 
   final TextEditingController controller;
+  final String selectedFilter;
   final bool isLoading;
   final Future<void> Function() onSearch;
-  final VoidCallback onChanged;
+  final ValueChanged<String> onFilterChanged;
+  final VoidCallback onTextChanged;
   final VoidCallback onAdd;
 
   @override
@@ -204,26 +280,47 @@ class _VoucherToolbar extends StatelessWidget {
           textInputAction: TextInputAction.search,
           onSubmitted: (_) => onSearch(),
           decoration: InputDecoration(
-            hintText: 'Tìm mã voucher',
+            hintText: 'Tìm mã hoặc tên voucher',
             prefixIcon: const Icon(Icons.search_rounded),
             suffixIcon: controller.text.isEmpty
-                ? null
+                ? IconButton(
+                    tooltip: 'Tìm kiếm',
+                    onPressed: onSearch,
+                    icon: const Icon(Icons.arrow_forward_rounded),
+                  )
                 : IconButton(
                     tooltip: 'Xóa tìm kiếm',
                     onPressed: () {
                       controller.clear();
+                      onTextChanged();
                       onSearch();
                     },
                     icon: const Icon(Icons.close_rounded),
                   ),
           ),
-          onChanged: (_) => onChanged(),
+          onChanged: (_) => onTextChanged(),
+        ),
+        const SizedBox(height: 12),
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: SegmentedButton<String>(
+            showSelectedIcon: false,
+            selected: {selectedFilter},
+            onSelectionChanged: isLoading
+                ? null
+                : (values) => onFilterChanged(values.first),
+            segments: const [
+              ButtonSegment(value: 'all', label: Text('Tất cả')),
+              ButtonSegment(value: 'active', label: Text('Đang hoạt động')),
+              ButtonSegment(value: 'inactive', label: Text('Ngừng hoạt động')),
+            ],
+          ),
         ),
         const SizedBox(height: 12),
         ElevatedButton.icon(
           onPressed: isLoading ? null : onAdd,
           icon: const Icon(Icons.add_rounded),
-          label: const Text('+ Thêm voucher'),
+          label: const Text('Thêm voucher'),
         ),
       ],
     );
@@ -238,13 +335,15 @@ class _VoucherCard extends StatelessWidget {
     required this.onDelete,
   });
 
-  final VoucherModel voucher;
+  final AdminVoucherModel voucher;
   final bool isBusy;
   final VoidCallback onEdit;
   final VoidCallback onDelete;
 
   @override
   Widget build(BuildContext context) {
+    final description = voucher.description?.trim();
+
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
       child: Padding(
@@ -279,6 +378,17 @@ class _VoucherCard extends StatelessWidget {
                 _StatusChip(isActive: voucher.isActive),
               ],
             ),
+            if (description != null && description.isNotEmpty) ...[
+              const SizedBox(height: 10),
+              Text(
+                description,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(
+                  context,
+                ).textTheme.bodyMedium?.copyWith(color: AppTheme.textSecondary),
+              ),
+            ],
             const SizedBox(height: 12),
             Wrap(
               spacing: 8,
@@ -290,35 +400,30 @@ class _VoucherCard extends StatelessWidget {
                   label:
                       'Đơn tối thiểu ${CurrencyFormatter.format(voucher.minOrderAmount)}',
                 ),
-                _InfoChip(
-                  label:
-                      'Đã dùng ${voucher.usedCount}/${voucher.usageLimit?.toString() ?? '∞'}',
-                ),
+                if (voucher.maxDiscountAmount != null)
+                  _InfoChip(
+                    label:
+                        'Giảm tối đa ${CurrencyFormatter.format(voucher.maxDiscountAmount!)}',
+                  ),
+                _InfoChip(label: _usageText(voucher)),
               ],
             ),
             const SizedBox(height: 12),
             _InfoLine(
               icon: Icons.event_available_rounded,
-              text:
-                  'Bắt đầu: ${_formatDate(voucher.startDate)} - Kết thúc: ${_formatDate(voucher.endDate)}',
+              text: 'Bắt đầu: ${_formatDate(voucher.startDate)}',
             ),
-            if ((voucher.description ?? '').trim().isNotEmpty) ...[
-              const SizedBox(height: 10),
-              Text(
-                voucher.description!,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: Theme.of(
-                  context,
-                ).textTheme.bodyMedium?.copyWith(color: AppTheme.textSecondary),
-              ),
-            ],
+            const SizedBox(height: 6),
+            _InfoLine(
+              icon: Icons.event_busy_rounded,
+              text: 'Kết thúc: ${_formatDate(voucher.endDate)}',
+            ),
             const SizedBox(height: 12),
             Row(
               children: [
                 Expanded(
                   child: OutlinedButton.icon(
-                    onPressed: onEdit,
+                    onPressed: isBusy ? null : onEdit,
                     icon: const Icon(Icons.edit_rounded),
                     label: const Text('Sửa'),
                   ),
@@ -327,8 +432,11 @@ class _VoucherCard extends StatelessWidget {
                 Expanded(
                   child: TextButton.icon(
                     onPressed: isBusy ? null : onDelete,
-                    icon: const Icon(Icons.visibility_off_rounded),
-                    label: const Text('Ẩn'),
+                    icon: const Icon(Icons.delete_outline_rounded),
+                    label: const Text('Xóa'),
+                    style: TextButton.styleFrom(
+                      foregroundColor: AppTheme.error,
+                    ),
                   ),
                 ),
               ],
@@ -340,19 +448,21 @@ class _VoucherCard extends StatelessWidget {
   }
 
   String _discountTypeText(String value) {
-    return value == 'PERCENT' ? 'Giảm theo %' : 'Giảm tiền';
+    final type = value.trim().toUpperCase();
+    return type == 'PERCENT' ? 'Giảm theo phần trăm' : 'Giảm tiền cố định';
   }
 
-  String _discountValueText(VoucherModel voucher) {
-    if (voucher.discountType == 'PERCENT') {
-      final maxDiscount = voucher.maxDiscountAmount;
-      final suffix = maxDiscount == null
-          ? ''
-          : ', tối đa ${CurrencyFormatter.format(maxDiscount)}';
-      return 'Giảm ${voucher.discountValue.toStringAsFixed(0)}%$suffix';
+  String _discountValueText(AdminVoucherModel voucher) {
+    if (voucher.discountType.trim().toUpperCase() == 'PERCENT') {
+      return '${voucher.discountValue.toStringAsFixed(0)}%';
     }
 
-    return 'Giảm ${CurrencyFormatter.format(voucher.discountValue)}';
+    return CurrencyFormatter.format(voucher.discountValue);
+  }
+
+  String _usageText(AdminVoucherModel voucher) {
+    final limit = voucher.usageLimit?.toString() ?? 'Không giới hạn';
+    return 'Đã dùng ${voucher.usedCount}/$limit';
   }
 
   String _formatDate(DateTime? value) {
@@ -398,7 +508,7 @@ class _StatusChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Chip(
-      label: Text(isActive ? 'Đang hoạt động' : 'Đã ẩn'),
+      label: Text(isActive ? 'Đang hoạt động' : 'Ngừng hoạt động'),
       visualDensity: VisualDensity.compact,
       backgroundColor: isActive
           ? AppTheme.success.withValues(alpha: 0.12)
@@ -411,41 +521,38 @@ class _StatusChip extends StatelessWidget {
   }
 }
 
-class _PaginationBar extends StatelessWidget {
-  const _PaginationBar({required this.provider});
+class _LoadMoreFooter extends StatelessWidget {
+  const _LoadMoreFooter({required this.provider});
 
   final AdminVoucherProvider provider;
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      children: [
-        IconButton.outlined(
-          onPressed: provider.isLoading || provider.isFirstPage
-              ? null
-              : provider.previousPage,
-          icon: const Icon(Icons.chevron_left_rounded),
-          tooltip: 'Trang trước',
-        ),
-        Expanded(
-          child: Text(
-            'Trang ${provider.page + 1}/${provider.totalPages} - ${provider.totalElements} voucher',
-            textAlign: TextAlign.center,
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-              color: AppTheme.textSecondary,
-              fontWeight: FontWeight.w700,
-            ),
+    if (provider.isLoadingMore) {
+      return const Padding(
+        padding: EdgeInsets.symmetric(vertical: 14),
+        child: Center(
+          child: SizedBox(
+            width: 24,
+            height: 24,
+            child: CircularProgressIndicator(strokeWidth: 2.4),
           ),
         ),
-        IconButton.outlined(
-          onPressed: provider.isLoading || provider.isLastPage
-              ? null
-              : provider.nextPage,
-          icon: const Icon(Icons.chevron_right_rounded),
-          tooltip: 'Trang sau',
+      );
+    }
+
+    if (!provider.hasMore) {
+      return Text(
+        'Đã hiển thị tất cả voucher',
+        textAlign: TextAlign.center,
+        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+          color: AppTheme.textSecondary,
+          fontWeight: FontWeight.w700,
         ),
-      ],
-    );
+      );
+    }
+
+    return const SizedBox(height: 32);
   }
 }
 
@@ -494,7 +601,7 @@ class _VoucherEmptyView extends StatelessWidget {
     return const SizedBox(
       height: 320,
       child: Center(
-        child: Text('Chưa có voucher phù hợp.', textAlign: TextAlign.center),
+        child: Text('Chưa có voucher nào', textAlign: TextAlign.center),
       ),
     );
   }

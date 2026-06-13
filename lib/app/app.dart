@@ -5,7 +5,9 @@ import 'package:provider/provider.dart';
 import '../core/firebase/firebase_messaging_config.dart';
 import '../core/navigation/app_navigator.dart';
 import '../core/network/dio_client.dart';
+import '../core/data/services/file_upload_service.dart';
 import '../features/account/data/services/user_address_service.dart';
+import '../features/account/data/services/user_profile_service.dart';
 import '../features/account/providers/user_address_provider.dart';
 import '../features/admin/data/services/admin_activity_log_service.dart';
 import '../features/admin/data/services/admin_brand_service.dart';
@@ -74,6 +76,8 @@ class PharmaApp extends StatelessWidget {
         ChangeNotifierProvider(
           create: (_) => AuthProvider(
             authService: AuthService(dioClient: dioClient),
+            userProfileService: UserProfileService(dioClient: dioClient),
+            fileUploadService: FileUploadService(dioClient: dioClient),
             onAuthenticated: () => _saveCurrentDeviceToken(deviceTokenService),
             onBeforeLogout: () =>
                 _deactivateCurrentDeviceToken(deviceTokenService),

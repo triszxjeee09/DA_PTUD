@@ -12,7 +12,7 @@ class AdminMoreScreen extends StatelessWidget {
       _AdminMenuItem(
         icon: Icons.category_rounded,
         title: 'Quản lý danh mục',
-        description: 'Thêm, sửa và ẩn danh mục sản phẩm',
+        description: 'Thêm, sửa và quản lý danh mục sản phẩm',
         routeName: AppRoutes.adminCategories,
       ),
       _AdminMenuItem(
@@ -22,9 +22,9 @@ class AdminMoreScreen extends StatelessWidget {
         routeName: AppRoutes.adminBrands,
       ),
       _AdminMenuItem(
-        icon: Icons.confirmation_number_rounded,
+        icon: Icons.local_offer_rounded,
         title: 'Quản lý voucher',
-        description: 'Thiết lập mã giảm giá và thời hạn',
+        description: 'Tạo và quản lý mã khuyến mãi',
         routeName: AppRoutes.adminVouchers,
       ),
       _AdminMenuItem(
@@ -40,9 +40,9 @@ class AdminMoreScreen extends StatelessWidget {
         routeName: AppRoutes.adminInventory,
       ),
       _AdminMenuItem(
-        icon: Icons.people_rounded,
+        icon: Icons.people_alt_rounded,
         title: 'Quản lý người dùng',
-        description: 'Trạng thái tài khoản và phân quyền',
+        description: 'Khóa tài khoản, gán vai trò và quản lý người dùng',
         routeName: AppRoutes.adminUsers,
       ),
       _AdminMenuItem(

@@ -182,7 +182,7 @@ class _AdminPharmacyFormScreenState extends State<AdminPharmacyFormScreen> {
                   ? null
                   : (value) => setState(() => _isActive = value),
               title: const Text('Đang hoạt động'),
-              activeColor: AppTheme.primaryBlue,
+              activeThumbColor: AppTheme.primaryBlue,
               contentPadding: EdgeInsets.zero,
             ),
           ],

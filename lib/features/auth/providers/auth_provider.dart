@@ -1,55 +1,108 @@
+import 'dart:async';
+import 'dart:io';
+
 import 'package:flutter/foundation.dart';
 
+import '../../../core/data/services/file_upload_service.dart';
 import '../../../core/errors/api_exception.dart';
 import '../../../core/storage/token_storage.dart';
+import '../../account/data/models/update_profile_request_model.dart';
+import '../../account/data/services/user_profile_service.dart';
 import '../data/models/forgot_password_request_model.dart';
+import '../data/models/auth_response_model.dart';
 import '../data/models/login_request_model.dart';
 import '../data/models/register_request_model.dart';
 import '../data/models/reset_password_with_otp_request_model.dart';
 import '../data/models/user_model.dart';
 import '../data/models/verify_forgot_password_otp_request_model.dart';
 import '../data/services/auth_service.dart';
+import '../data/services/google_auth_service.dart';
 
 class AuthProvider extends ChangeNotifier {
   AuthProvider({
     AuthService? authService,
+    UserProfileService? userProfileService,
+    FileUploadService? fileUploadService,
+    GoogleAuthService? googleAuthService,
     TokenStorage? tokenStorage,
     Future<void> Function()? onAuthenticated,
     Future<void> Function()? onBeforeLogout,
   }) : _onAuthenticated = onAuthenticated,
        _onBeforeLogout = onBeforeLogout,
        _authService = authService ?? AuthService(),
+       _userProfileService = userProfileService ?? UserProfileService(),
+       _fileUploadService = fileUploadService ?? FileUploadService(),
+       _googleAuthService = googleAuthService ?? GoogleAuthService(),
        _tokenStorage = tokenStorage ?? const TokenStorage();
 
   static const String _defaultErrorMessage =
       'Đã có lỗi xảy ra, vui lòng thử lại';
 
   final AuthService _authService;
+  final UserProfileService _userProfileService;
+  final FileUploadService _fileUploadService;
+  final GoogleAuthService _googleAuthService;
   final TokenStorage _tokenStorage;
   final Future<void> Function()? _onAuthenticated;
   final Future<void> Function()? _onBeforeLogout;
 
   UserModel? _currentUser;
   bool _isLoading = false;
+  bool _isGoogleLoading = false;
   bool _isSendingOtp = false;
   bool _isVerifyingOtp = false;
   bool _isResettingPassword = false;
+  bool _isLoadingProfile = false;
+  bool _isUpdatingProfile = false;
+  bool _isUploadingAvatar = false;
   bool _isAuthenticated = false;
   String? _errorMessage;
+  String? _googleLoginError;
+  String? _profileErrorMessage;
+  String? _avatarErrorMessage;
   String? _forgotPasswordUsername;
   int? _otpExpiresInMinutes;
   bool _isOtpVerified = false;
 
   UserModel? get currentUser => _currentUser;
   bool get isLoading => _isLoading;
+  bool get isGoogleLoading => _isGoogleLoading;
+  bool get isSigningInWithGoogle => _isGoogleLoading;
   bool get isSendingOtp => _isSendingOtp;
   bool get isVerifyingOtp => _isVerifyingOtp;
   bool get isResettingPassword => _isResettingPassword;
+  bool get isLoadingProfile => _isLoadingProfile;
+  bool get isUpdatingProfile => _isUpdatingProfile;
+  bool get isUploadingAvatar => _isUploadingAvatar;
   bool get isAuthenticated => _isAuthenticated;
   String? get errorMessage => _errorMessage;
+  String? get googleLoginError => _googleLoginError;
+  String? get profileErrorMessage => _profileErrorMessage;
+  String? get avatarErrorMessage => _avatarErrorMessage;
   String? get forgotPasswordUsername => _forgotPasswordUsername;
   int? get otpExpiresInMinutes => _otpExpiresInMinutes;
   bool get isOtpVerified => _isOtpVerified;
+  bool get isAdmin => _currentUser?.isAdmin ?? false;
+  bool get isPharmacist => _currentUser?.isPharmacist ?? false;
+  bool get isCustomer => _currentUser?.isCustomer ?? false;
+
+  String getHomeRouteForCurrentUser() {
+    if (isAdmin) {
+      return '/admin';
+    }
+
+    if (isPharmacist) {
+      return '/pharmacist';
+    }
+
+    return '/main';
+  }
+
+  @override
+  void dispose() {
+    unawaited(_googleAuthService.dispose());
+    super.dispose();
+  }
 
   Future<bool> login(String username, String password) async {
     _setLoading(true);
@@ -59,14 +112,10 @@ class AuthProvider extends ChangeNotifier {
         LoginRequestModel(username: username, password: password),
       );
 
-      await _tokenStorage.saveToken(response.accessToken);
-      final authenticatedUser = await _loadUserAfterAuth(response.user);
-      await _runAuthSideEffect(
-        _onAuthenticated,
-        'Không thể lưu device token sau khi đăng nhập',
+      await _completeAuthentication(
+        response,
+        deviceTokenErrorMessage: 'Không thể lưu device token sau khi đăng nhập',
       );
-      _currentUser = authenticatedUser;
-      _isAuthenticated = true;
       _errorMessage = null;
       return true;
     } catch (error) {
@@ -99,14 +148,10 @@ class AuthProvider extends ChangeNotifier {
         ),
       );
 
-      await _tokenStorage.saveToken(response.accessToken);
-      final authenticatedUser = await _loadUserAfterAuth(response.user);
-      await _runAuthSideEffect(
-        _onAuthenticated,
-        'Không thể lưu device token sau khi đăng ký',
+      await _completeAuthentication(
+        response,
+        deviceTokenErrorMessage: 'Không thể lưu device token sau khi đăng ký',
       );
-      _currentUser = authenticatedUser;
-      _isAuthenticated = true;
       _errorMessage = null;
       return true;
     } catch (error) {
@@ -116,6 +161,58 @@ class AuthProvider extends ChangeNotifier {
       return false;
     } finally {
       _setLoading(false);
+    }
+  }
+
+  Future<bool> loginWithGoogle() async {
+    if (_isGoogleLoading) {
+      return false;
+    }
+
+    _isGoogleLoading = true;
+    _googleLoginError = null;
+    notifyListeners();
+
+    try {
+      final idToken = await _googleAuthService.signInAndGetIdToken();
+      if (idToken == null || idToken.trim().isEmpty) {
+        _googleLoginError = 'Không lấy được thông tin đăng nhập Google';
+        return false;
+      }
+      final response = await _authService.loginWithGoogle(idToken);
+      if (response.accessToken.trim().isEmpty) {
+        throw const ApiException('Máy chủ không trả access token');
+      }
+
+      await _completeGoogleAuthentication(
+        response,
+        deviceTokenErrorMessage:
+            'Không thể lưu device token sau khi đăng nhập Google',
+      );
+      _errorMessage = null;
+      _googleLoginError = null;
+      return true;
+    } on GoogleAuthException catch (error) {
+      if (!error.canceled && error.message.trim().isNotEmpty) {
+        _googleLoginError = error.message;
+      }
+
+      return false;
+    } on ApiException catch (error) {
+      _googleLoginError = error.message.trim().isNotEmpty
+          ? error.message
+          : _defaultErrorMessage;
+      await _runAuthSideEffect(
+        _googleAuthService.signOut,
+        'Không thể đăng xuất Google sau khi backend từ chối đăng nhập',
+      );
+      return false;
+    } catch (error) {
+      _googleLoginError = _readErrorMessage(error);
+      return false;
+    } finally {
+      _isGoogleLoading = false;
+      notifyListeners();
     }
   }
 
@@ -155,6 +252,81 @@ class AuthProvider extends ChangeNotifier {
       _errorMessage = _readErrorMessage(error);
       notifyListeners();
       return false;
+    }
+  }
+
+  Future<void> loadMyProfile() async {
+    _setLoadingProfile(true);
+
+    try {
+      _currentUser = await _userProfileService.getMyProfile();
+      _isAuthenticated = true;
+      _profileErrorMessage = null;
+    } catch (error) {
+      _profileErrorMessage = _readErrorMessage(error);
+    } finally {
+      _setLoadingProfile(false);
+    }
+  }
+
+  Future<bool> updateMyProfile({
+    required String fullName,
+    required String email,
+    required String phone,
+    String? avatarUrl,
+    String? gender,
+    String? dateOfBirth,
+  }) async {
+    _setUpdatingProfile(true);
+
+    try {
+      final updatedUser = await _userProfileService.updateMyProfile(
+        UpdateProfileRequestModel(
+          fullName: fullName,
+          email: email,
+          phone: phone,
+          avatarUrl: avatarUrl,
+          gender: gender,
+          dateOfBirth: dateOfBirth,
+        ),
+      );
+      _currentUser = updatedUser;
+      _isAuthenticated = true;
+      _profileErrorMessage = null;
+      return true;
+    } catch (error) {
+      _profileErrorMessage = _readErrorMessage(error);
+      return false;
+    } finally {
+      _setUpdatingProfile(false);
+    }
+  }
+
+  Future<bool> uploadAndUpdateAvatar(File file) async {
+    _isUploadingAvatar = true;
+    _avatarErrorMessage = null;
+    notifyListeners();
+
+    try {
+      final uploadResponse = await _fileUploadService.uploadImage(
+        file: file,
+        folder: 'avatars',
+      );
+      final fileUrl = uploadResponse.fileUrl.trim();
+      if (fileUrl.isEmpty) {
+        throw const ApiException('Không nhận được đường dẫn ảnh đại diện');
+      }
+
+      final updatedUser = await _userProfileService.updateAvatar(fileUrl);
+      _currentUser = updatedUser;
+      _isAuthenticated = true;
+      _avatarErrorMessage = null;
+      return true;
+    } catch (error) {
+      _avatarErrorMessage = _readErrorMessage(error);
+      return false;
+    } finally {
+      _setUploadingAvatar(false);
     }
   }
 
@@ -270,6 +442,7 @@ class AuthProvider extends ChangeNotifier {
     _isVerifyingOtp = false;
     _isResettingPassword = false;
     _errorMessage = null;
+    _googleLoginError = null;
     notifyListeners();
   }
 
@@ -285,21 +458,29 @@ class AuthProvider extends ChangeNotifier {
         _authService.logout,
         'Không thể đăng xuất trên máy chủ',
       );
+      await _runAuthSideEffect(
+        _googleAuthService.signOut,
+        'Không thể đăng xuất Google',
+      );
       await _clearTokenSafely();
     } finally {
       _currentUser = null;
       _isAuthenticated = false;
       _errorMessage = null;
+      _googleLoginError = null;
+      _profileErrorMessage = null;
+      _avatarErrorMessage = null;
       _setLoading(false);
     }
   }
 
   void clearError() {
-    if (_errorMessage == null) {
+    if (_errorMessage == null && _googleLoginError == null) {
       return;
     }
 
     _errorMessage = null;
+    _googleLoginError = null;
     notifyListeners();
   }
 
@@ -339,12 +520,70 @@ class AuthProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  void _setLoadingProfile(bool value) {
+    if (_isLoadingProfile == value) {
+      return;
+    }
+
+    _isLoadingProfile = value;
+    notifyListeners();
+  }
+
+  void _setUpdatingProfile(bool value) {
+    if (_isUpdatingProfile == value) {
+      return;
+    }
+
+    _isUpdatingProfile = value;
+    notifyListeners();
+  }
+
+  void _setUploadingAvatar(bool value) {
+    if (_isUploadingAvatar == value) {
+      return;
+    }
+
+    _isUploadingAvatar = value;
+    notifyListeners();
+  }
+
   Future<void> _clearTokenSafely() async {
     try {
       await _tokenStorage.clearToken();
     } catch (_) {
       // Ignore storage errors so auth state can still reset safely.
     }
+  }
+
+  Future<void> _completeAuthentication(
+    AuthResponseModel response, {
+    required String deviceTokenErrorMessage,
+  }) async {
+    await _tokenStorage.saveToken(response.accessToken);
+    final refreshToken = response.refreshToken;
+    if (refreshToken != null && refreshToken.trim().isNotEmpty) {
+      await _tokenStorage.saveRefreshToken(refreshToken);
+    }
+
+    final authenticatedUser = await _loadUserAfterAuth(response.user);
+    await _runAuthSideEffect(_onAuthenticated, deviceTokenErrorMessage);
+    _currentUser = authenticatedUser;
+    _isAuthenticated = true;
+  }
+
+  Future<void> _completeGoogleAuthentication(
+    AuthResponseModel response, {
+    required String deviceTokenErrorMessage,
+  }) async {
+    await _tokenStorage.saveToken(response.accessToken);
+    final refreshToken = response.refreshToken;
+    if (refreshToken != null && refreshToken.trim().isNotEmpty) {
+      await _tokenStorage.saveRefreshToken(refreshToken);
+    }
+
+    await _runAuthSideEffect(_onAuthenticated, deviceTokenErrorMessage);
+    _currentUser = response.user;
+    _isAuthenticated = true;
   }
 
   Future<void> _runAuthSideEffect(
@@ -377,6 +616,10 @@ class AuthProvider extends ChangeNotifier {
   }
 
   String _readErrorMessage(Object error) {
+    if (error is GoogleAuthException && error.message.trim().isNotEmpty) {
+      return error.message;
+    }
+
     if (error is ApiException && error.message.trim().isNotEmpty) {
       return error.message;
     }

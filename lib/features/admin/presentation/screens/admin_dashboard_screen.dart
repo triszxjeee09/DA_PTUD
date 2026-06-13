@@ -112,6 +112,10 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                 const SizedBox(height: 18),
                 _StatisticsGrid(overview: overview),
                 const SizedBox(height: 22),
+                const _QuickActions(),
+                const SizedBox(height: 10),
+                const _CategoryShortcutCard(),
+                const SizedBox(height: 22),
                 _SectionHeader(title: 'Trạng thái đơn hàng'),
                 const SizedBox(height: 10),
                 _OrderStatusList(statistics: provider.orderStatusStatistics),
@@ -123,6 +127,93 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
             ),
           );
         },
+      ),
+    );
+  }
+}
+
+class _QuickActions extends StatelessWidget {
+  const _QuickActions();
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const _SectionHeader(title: 'Truy cập nhanh'),
+        const SizedBox(height: 10),
+        Card(
+          child: ListTile(
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 14,
+              vertical: 8,
+            ),
+            leading: const CircleAvatar(
+              backgroundColor: AppTheme.lightBlue,
+              child: Icon(
+                Icons.local_offer_rounded,
+                color: AppTheme.primaryBlue,
+              ),
+            ),
+            title: const Text(
+              'Quản lý voucher',
+              style: TextStyle(fontWeight: FontWeight.w800),
+            ),
+            subtitle: const Text('Tạo và quản lý mã khuyến mãi'),
+            trailing: const Icon(Icons.chevron_right_rounded),
+            onTap: () =>
+                Navigator.of(context).pushNamed(AppRoutes.adminVouchers),
+          ),
+        ),
+        const SizedBox(height: 10),
+        Card(
+          child: ListTile(
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 14,
+              vertical: 8,
+            ),
+            leading: const CircleAvatar(
+              backgroundColor: AppTheme.lightBlue,
+              child: Icon(
+                Icons.people_alt_rounded,
+                color: AppTheme.primaryBlue,
+              ),
+            ),
+            title: const Text(
+              'Người dùng',
+              style: TextStyle(fontWeight: FontWeight.w800),
+            ),
+            subtitle: const Text(
+              'Khóa tài khoản, gán vai trò và quản lý người dùng',
+            ),
+            trailing: const Icon(Icons.chevron_right_rounded),
+            onTap: () => Navigator.of(context).pushNamed(AppRoutes.adminUsers),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _CategoryShortcutCard extends StatelessWidget {
+  const _CategoryShortcutCard();
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: ListTile(
+        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        leading: const CircleAvatar(
+          backgroundColor: AppTheme.lightBlue,
+          child: Icon(Icons.category_rounded, color: AppTheme.primaryBlue),
+        ),
+        title: const Text(
+          'Danh mục',
+          style: TextStyle(fontWeight: FontWeight.w800),
+        ),
+        subtitle: const Text('Thêm, sửa và quản lý danh mục sản phẩm'),
+        trailing: const Icon(Icons.chevron_right_rounded),
+        onTap: () => Navigator.of(context).pushNamed(AppRoutes.adminCategories),
       ),
     );
   }

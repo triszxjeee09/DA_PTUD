@@ -8,8 +8,8 @@ class AdminVoucherRequestModel {
     this.maxDiscountAmount,
     required this.minOrderAmount,
     this.usageLimit,
-    required this.startDate,
-    required this.endDate,
+    this.startDate,
+    this.endDate,
     required this.isActive,
   });
 
@@ -21,8 +21,8 @@ class AdminVoucherRequestModel {
   final double? maxDiscountAmount;
   final double minOrderAmount;
   final int? usageLimit;
-  final DateTime startDate;
-  final DateTime endDate;
+  final String? startDate;
+  final String? endDate;
   final bool isActive;
 
   Map<String, dynamic> toJson() {
@@ -35,8 +35,8 @@ class AdminVoucherRequestModel {
       'maxDiscountAmount': maxDiscountAmount,
       'minOrderAmount': minOrderAmount,
       'usageLimit': usageLimit,
-      'startDate': startDate.toIso8601String(),
-      'endDate': endDate.toIso8601String(),
+      'startDate': startDate,
+      'endDate': endDate,
       'isActive': isActive,
     };
   }

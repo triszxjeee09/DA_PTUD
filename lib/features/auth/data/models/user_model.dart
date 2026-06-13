@@ -1,6 +1,7 @@
 class UserModel {
   const UserModel({
     required this.id,
+    this.username,
     this.fullName,
     this.email,
     this.phone,
@@ -8,11 +9,13 @@ class UserModel {
     this.gender,
     this.dateOfBirth,
     this.status,
+    this.authProvider,
     this.roles = const [],
     this.createdAt,
   });
 
   final String id;
+  final String? username;
   final String? fullName;
   final String? email;
   final String? phone;
@@ -20,6 +23,7 @@ class UserModel {
   final String? gender;
   final DateTime? dateOfBirth;
   final String? status;
+  final String? authProvider;
   final List<String> roles;
   final DateTime? createdAt;
 
@@ -32,13 +36,15 @@ class UserModel {
   factory UserModel.fromJson(Map<String, dynamic> json) {
     return UserModel(
       id: _readString(json['id']),
+      username: _readNullableString(json['username']),
       fullName: _readNullableString(json['fullName']),
       email: _readNullableString(json['email']),
       phone: _readNullableString(json['phone']),
-      avatarUrl: _readNullableString(json['avatarUrl']),
+      avatarUrl: _readNullableString(json['avatarUrl'] ?? json['avatar']),
       gender: _readNullableString(json['gender']),
       dateOfBirth: _readDateTime(json['dateOfBirth']),
       status: _readNullableString(json['status']),
+      authProvider: _readNullableString(json['authProvider']),
       roles: _readStringList(json['roles']),
       createdAt: _readDateTime(json['createdAt']),
     );
@@ -47,6 +53,7 @@ class UserModel {
   Map<String, dynamic> toJson() {
     return {
       'id': id,
+      'username': username,
       'fullName': fullName,
       'email': email,
       'phone': phone,
@@ -54,6 +61,7 @@ class UserModel {
       'gender': gender,
       'dateOfBirth': dateOfBirth?.toIso8601String(),
       'status': status,
+      'authProvider': authProvider,
       'roles': roles,
       'createdAt': createdAt?.toIso8601String(),
     };
@@ -61,6 +69,7 @@ class UserModel {
 
   UserModel copyWith({
     String? id,
+    String? username,
     String? fullName,
     String? email,
     String? phone,
@@ -68,11 +77,13 @@ class UserModel {
     String? gender,
     DateTime? dateOfBirth,
     String? status,
+    String? authProvider,
     List<String>? roles,
     DateTime? createdAt,
   }) {
     return UserModel(
       id: id ?? this.id,
+      username: username ?? this.username,
       fullName: fullName ?? this.fullName,
       email: email ?? this.email,
       phone: phone ?? this.phone,
@@ -80,6 +91,7 @@ class UserModel {
       gender: gender ?? this.gender,
       dateOfBirth: dateOfBirth ?? this.dateOfBirth,
       status: status ?? this.status,
+      authProvider: authProvider ?? this.authProvider,
       roles: roles ?? this.roles,
       createdAt: createdAt ?? this.createdAt,
     );
@@ -87,9 +99,12 @@ class UserModel {
 
   bool _hasRole(String role) {
     return roles.any((value) {
-      final normalizedRole = value.trim().toUpperCase();
-      return normalizedRole == role || normalizedRole == 'ROLE_$role';
+      return normalizeRole(value) == role;
     });
+  }
+
+  static String normalizeRole(String role) {
+    return role.trim().replaceFirst('ROLE_', '').toUpperCase();
   }
 
   static String _readString(Object? value) {

@@ -1,7 +1,7 @@
 import 'package:flutter/foundation.dart';
 
 import '../../../core/errors/api_exception.dart';
-import '../../voucher/data/models/voucher_model.dart';
+import '../data/models/admin_voucher_model.dart';
 import '../data/models/admin_voucher_request_model.dart';
 import '../data/services/admin_voucher_service.dart';
 
@@ -11,114 +11,146 @@ class AdminVoucherProvider extends ChangeNotifier {
 
   static const String _defaultErrorMessage =
       'Đã có lỗi xảy ra, vui lòng thử lại';
+  static const int _pageSize = 10;
 
   final AdminVoucherService _adminVoucherService;
 
-  List<VoucherModel> _vouchers = const [];
-  VoucherModel? _selectedVoucher;
+  final List<AdminVoucherModel> _vouchers = [];
+  AdminVoucherModel? _selectedVoucher;
   bool _isLoading = false;
   bool _isLoadingDetail = false;
-  bool _isSaving = false;
+  bool _isLoadingMore = false;
+  bool _isSubmitting = false;
   bool _isDeleting = false;
   String? _errorMessage;
-  String _keyword = '';
-  int _page = 0;
-  int _size = 20;
-  int _totalPages = 1;
-  int _totalElements = 0;
-  bool _isLast = true;
+  int _currentPage = 0;
+  bool _hasMore = true;
+  String? _currentKeyword;
+  bool? _currentIsActiveFilter;
 
-  List<VoucherModel> get vouchers => _vouchers;
-  VoucherModel? get selectedVoucher => _selectedVoucher;
+  List<AdminVoucherModel> get vouchers => List.unmodifiable(_vouchers);
+  AdminVoucherModel? get selectedVoucher => _selectedVoucher;
   bool get isLoading => _isLoading;
   bool get isLoadingDetail => _isLoadingDetail;
-  bool get isSaving => _isSaving;
+  bool get isLoadingMore => _isLoadingMore;
+  bool get isSubmitting => _isSubmitting;
   bool get isDeleting => _isDeleting;
   String? get errorMessage => _errorMessage;
-  String get keyword => _keyword;
-  int get page => _page;
-  int get totalPages => _totalPages;
-  int get totalElements => _totalElements;
-  bool get isFirstPage => _page <= 0;
-  bool get isLastPage => _isLast || _page >= _totalPages - 1;
+  int get currentPage => _currentPage;
+  bool get hasMore => _hasMore;
+  String? get currentKeyword => _currentKeyword;
+  bool? get currentIsActiveFilter => _currentIsActiveFilter;
 
-  Future<void> loadVouchers({String? keyword, int? page}) async {
-    if (keyword != null) {
-      _keyword = keyword.trim();
-      _page = 0;
+  Future<void> loadVouchers({
+    bool refresh = false,
+    String? keyword,
+    bool? isActive,
+  }) async {
+    if (_isLoading || _isLoadingMore) {
+      return;
     }
 
-    if (page != null) {
-      _page = page < 0 ? 0 : page;
+    final nextKeyword = _normalizeKeyword(keyword);
+    final filterChanged =
+        nextKeyword != _currentKeyword || isActive != _currentIsActiveFilter;
+    final shouldRefresh = refresh || filterChanged;
+
+    if (shouldRefresh) {
+      _currentPage = 0;
+      _vouchers.clear();
+      _hasMore = true;
+    } else if (!_hasMore) {
+      return;
     }
 
-    _setLoading(true);
+    _currentKeyword = nextKeyword;
+    _currentIsActiveFilter = isActive;
 
-    try {
-      final result = await _adminVoucherService.getVouchers(
-        keyword: _keyword,
-        page: _page,
-        size: _size,
-      );
-      _vouchers = result.content;
-      _page = result.page;
-      _size = result.size == 0 ? _size : result.size;
-      _totalPages = result.totalPages == 0 ? 1 : result.totalPages;
-      _totalElements = result.totalElements;
-      _isLast = result.last;
-      _errorMessage = null;
-    } catch (error) {
-      _errorMessage = _readErrorMessage(error);
-    } finally {
-      _setLoading(false);
-    }
-  }
+    final pageToLoad = _currentPage;
+    final isFirstPage = pageToLoad == 0 && _vouchers.isEmpty;
 
-  Future<void> nextPage() {
-    if (isLastPage) {
-      return Future.value();
-    }
-
-    return loadVouchers(page: _page + 1);
-  }
-
-  Future<void> previousPage() {
     if (isFirstPage) {
-      return Future.value();
+      _isLoading = true;
+    } else {
+      _isLoadingMore = true;
     }
-
-    return loadVouchers(page: _page - 1);
-  }
-
-  Future<VoucherModel?> loadVoucherDetail(String id) async {
-    _setLoadingDetail(true);
+    _errorMessage = null;
+    notifyListeners();
 
     try {
-      _selectedVoucher = await _adminVoucherService.getVoucherDetail(id);
+      if (kDebugMode) {
+        debugPrint(
+          '[AdminVoucher] Load list page=$pageToLoad '
+          'keyword=${_currentKeyword ?? ''} '
+          'isActive=${_currentIsActiveFilter ?? 'all'}',
+        );
+      }
+
+      final pageResponse = await _adminVoucherService.getVouchers(
+        page: pageToLoad,
+        size: _pageSize,
+        keyword: _currentKeyword,
+        isActive: _currentIsActiveFilter,
+      );
+
+      final existingIds = _vouchers.map((voucher) => voucher.id).toSet();
+      final newVouchers = pageResponse.content
+          .where((voucher) => !existingIds.contains(voucher.id))
+          .toList();
+
+      _vouchers.addAll(newVouchers);
+      _currentPage = pageResponse.page + 1;
+      _hasMore = !pageResponse.last;
       _errorMessage = null;
-      return _selectedVoucher;
     } catch (error) {
       _errorMessage = _readErrorMessage(error);
-      return null;
     } finally {
-      _setLoadingDetail(false);
+      _isLoading = false;
+      _isLoadingMore = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> loadVoucherDetail(String id) async {
+    _isLoadingDetail = true;
+    _selectedVoucher = null;
+    _errorMessage = null;
+    notifyListeners();
+
+    try {
+      _selectedVoucher = await _adminVoucherService.getVoucherById(id);
+      _errorMessage = null;
+    } catch (error) {
+      _errorMessage = _readErrorMessage(error);
+    } finally {
+      _isLoadingDetail = false;
+      notifyListeners();
     }
   }
 
   Future<bool> createVoucher(AdminVoucherRequestModel request) async {
-    _setSaving(true);
+    _isSubmitting = true;
+    _errorMessage = null;
+    notifyListeners();
 
     try {
       await _adminVoucherService.createVoucher(request);
-      await loadVouchers(page: 0);
+      if (kDebugMode) {
+        debugPrint('[AdminVoucher] Created voucher code=${request.code}');
+      }
+      await loadVouchers(
+        refresh: true,
+        keyword: _currentKeyword,
+        isActive: _currentIsActiveFilter,
+      );
       _errorMessage = null;
       return true;
     } catch (error) {
       _errorMessage = _readErrorMessage(error);
-      notifyListeners();
       return false;
     } finally {
-      _setSaving(false);
+      _isSubmitting = false;
+      notifyListeners();
     }
   }
 
@@ -126,73 +158,87 @@ class AdminVoucherProvider extends ChangeNotifier {
     String id,
     AdminVoucherRequestModel request,
   ) async {
-    _setSaving(true);
+    _isSubmitting = true;
+    _errorMessage = null;
+    notifyListeners();
 
     try {
-      await _adminVoucherService.updateVoucher(id, request);
-      await loadVouchers(page: _page);
+      final updatedVoucher = await _adminVoucherService.updateVoucher(
+        id,
+        request,
+      );
+      if (kDebugMode) {
+        debugPrint('[AdminVoucher] Updated voucher id=$id');
+      }
+
+      final index = _vouchers.indexWhere((voucher) => voucher.id == id);
+      if (index >= 0) {
+        _vouchers[index] = updatedVoucher;
+      }
+      _selectedVoucher = updatedVoucher;
+      await loadVouchers(
+        refresh: true,
+        keyword: _currentKeyword,
+        isActive: _currentIsActiveFilter,
+      );
       _errorMessage = null;
       return true;
     } catch (error) {
       _errorMessage = _readErrorMessage(error);
-      notifyListeners();
       return false;
     } finally {
-      _setSaving(false);
+      _isSubmitting = false;
+      notifyListeners();
     }
   }
 
   Future<bool> deleteVoucher(String id) async {
-    _setDeleting(true);
+    _isDeleting = true;
+    _errorMessage = null;
+    notifyListeners();
 
     try {
       await _adminVoucherService.deleteVoucher(id);
-      await loadVouchers(page: _page);
+      if (kDebugMode) {
+        debugPrint('[AdminVoucher] Deleted voucher id=$id');
+      }
+
+      _vouchers.removeWhere((voucher) => voucher.id == id);
+      if (_selectedVoucher?.id == id) {
+        _selectedVoucher = null;
+      }
       _errorMessage = null;
       return true;
     } catch (error) {
       _errorMessage = _readErrorMessage(error);
-      notifyListeners();
       return false;
     } finally {
-      _setDeleting(false);
+      _isDeleting = false;
+      notifyListeners();
     }
   }
 
-  void _setLoading(bool value) {
-    if (_isLoading == value) {
+  void clearSelectedVoucher() {
+    if (_selectedVoucher == null) {
       return;
     }
 
-    _isLoading = value;
+    _selectedVoucher = null;
     notifyListeners();
   }
 
-  void _setLoadingDetail(bool value) {
-    if (_isLoadingDetail == value) {
+  void clearError() {
+    if (_errorMessage == null) {
       return;
     }
 
-    _isLoadingDetail = value;
+    _errorMessage = null;
     notifyListeners();
   }
 
-  void _setSaving(bool value) {
-    if (_isSaving == value) {
-      return;
-    }
-
-    _isSaving = value;
-    notifyListeners();
-  }
-
-  void _setDeleting(bool value) {
-    if (_isDeleting == value) {
-      return;
-    }
-
-    _isDeleting = value;
-    notifyListeners();
+  String? _normalizeKeyword(String? value) {
+    final text = value?.trim();
+    return text == null || text.isEmpty ? null : text;
   }
 
   String _readErrorMessage(Object error) {
