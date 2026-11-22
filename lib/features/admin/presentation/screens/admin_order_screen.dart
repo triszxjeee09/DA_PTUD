@@ -109,6 +109,7 @@ class _AdminOrderScreenState extends State<AdminOrderScreen> {
     );
   }
 
+  // ignore: unused_element
   void _showDetail(OrderModel order) {
     showDialog<void>(
       context: context,
@@ -203,7 +204,10 @@ class _AdminOrderScreenState extends State<AdminOrderScreen> {
                     (order) => _OrderCard(
                       order: order,
                       isBusy: provider.isUpdating,
-                      onDetail: () => _showDetail(order),
+                      onDetail: () => Navigator.of(context).pushNamed(
+                        AppRoutes.adminOrderDetail,
+                        arguments: {'orderId': order.id},
+                      ),
                       onUpdateStatus: () => _showUpdateStatus(order),
                     ),
                   ),

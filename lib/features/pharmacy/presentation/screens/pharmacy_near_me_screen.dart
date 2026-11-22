@@ -3,6 +3,8 @@ import 'package:provider/provider.dart';
 
 import '../../../../app/routes.dart';
 import '../../../../app/theme.dart';
+import '../../../../core/location/location_service.dart';
+import '../../../../core/location/map_launcher.dart';
 import '../../../../core/widgets/app_empty_state.dart';
 import '../../../../core/widgets/app_loading.dart';
 import '../../data/models/pharmacy_model.dart';
@@ -17,7 +19,10 @@ class PharmacyNearMeScreen extends StatefulWidget {
 
 class _PharmacyNearMeScreenState extends State<PharmacyNearMeScreen> {
   final TextEditingController _searchController = TextEditingController();
+  final LocationService _locationService = const LocationService();
   String _keyword = '';
+  LocationResult? _location;
+  bool _locating = false;
 
   @override
   void initState() {
@@ -54,10 +59,50 @@ class _PharmacyNearMeScreenState extends State<PharmacyNearMeScreen> {
     }).toList();
   }
 
-  void _showComingSoon(String message) {
+  void _showMessage(String message) {
     ScaffoldMessenger.of(context)
       ..clearSnackBars()
       ..showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  Future<void> _locate() async {
+    setState(() => _locating = true);
+    final result = await _locationService.currentPosition();
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _locating = false;
+      if (result.hasPosition) {
+        _location = result;
+      }
+    });
+    if (!result.hasPosition) {
+      _showMessage(result.message ?? 'Không thể xác định vị trí');
+    }
+  }
+
+  /// Khoảng cách (mét) từ vị trí hiện tại tới nhà thuốc, `null` nếu chưa có dữ liệu.
+  double? _distanceTo(PharmacyModel pharmacy) {
+    final location = _location;
+    if (location == null ||
+        !location.hasPosition ||
+        pharmacy.latitude == null ||
+        pharmacy.longitude == null) {
+      return null;
+    }
+    return _locationService.distanceMeters(
+      location.latitude!,
+      location.longitude!,
+      pharmacy.latitude!,
+      pharmacy.longitude!,
+    );
+  }
+
+  String _distanceText(double meters) {
+    return meters < 1000
+        ? '${meters.round()} m'
+        : '${(meters / 1000).toStringAsFixed(1)} km';
   }
 
   void _openDetail(PharmacyModel pharmacy) {
@@ -67,14 +112,28 @@ class _PharmacyNearMeScreenState extends State<PharmacyNearMeScreen> {
     );
   }
 
-  void _openDirection(PharmacyModel pharmacy) {
-    _showComingSoon('Chức năng chỉ đường đang phát triển');
+  Future<void> _openDirection(PharmacyModel pharmacy) async {
+    final opened = await MapLauncher.openDirections(
+      latitude: pharmacy.latitude,
+      longitude: pharmacy.longitude,
+      address: pharmacy.fullAddress ?? pharmacy.address,
+    );
+    if (!opened && mounted) {
+      _showMessage('Không thể mở ứng dụng bản đồ');
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<PharmacyProvider>();
-    final pharmacies = _filterPharmacies(provider.pharmacies);
+    final pharmacies = [..._filterPharmacies(provider.pharmacies)];
+    if (_location?.hasPosition == true) {
+      pharmacies.sort((a, b) {
+        final da = _distanceTo(a) ?? double.infinity;
+        final db = _distanceTo(b) ?? double.infinity;
+        return da.compareTo(db);
+      });
+    }
 
     return Scaffold(
       backgroundColor: const Color(0xFFF4F7FF),
@@ -104,9 +163,9 @@ class _PharmacyNearMeScreenState extends State<PharmacyNearMeScreen> {
             ),
             const SizedBox(height: 16),
             _MapPreviewCard(
-              onLocationTap: () {
-                _showComingSoon('Chức năng đang phát triển');
-              },
+              onLocationTap: _locating ? null : _locate,
+              locating: _locating,
+              hasLocation: _location?.hasPosition == true,
             ),
             const SizedBox(height: 20),
             const Text(
@@ -144,6 +203,9 @@ class _PharmacyNearMeScreenState extends State<PharmacyNearMeScreen> {
               for (final pharmacy in pharmacies) ...[
                 _PharmacyCard(
                   pharmacy: pharmacy,
+                  distanceText: _distanceTo(pharmacy) == null
+                      ? null
+                      : _distanceText(_distanceTo(pharmacy)!),
                   onDetail: () => _openDetail(pharmacy),
                   onDirection: () => _openDirection(pharmacy),
                 ),
@@ -157,9 +219,15 @@ class _PharmacyNearMeScreenState extends State<PharmacyNearMeScreen> {
 }
 
 class _MapPreviewCard extends StatelessWidget {
-  const _MapPreviewCard({required this.onLocationTap});
+  const _MapPreviewCard({
+    required this.onLocationTap,
+    required this.locating,
+    required this.hasLocation,
+  });
 
-  final VoidCallback onLocationTap;
+  final VoidCallback? onLocationTap;
+  final bool locating;
+  final bool hasLocation;
 
   @override
   Widget build(BuildContext context) {
@@ -196,7 +264,13 @@ class _MapPreviewCard extends StatelessWidget {
           OutlinedButton.icon(
             onPressed: onLocationTap,
             icon: const Icon(Icons.my_location_outlined),
-            label: const Text('Lấy vị trí hiện tại'),
+            label: Text(
+              locating
+                  ? 'Đang định vị...'
+                  : hasLocation
+                  ? 'Đã sắp xếp theo khoảng cách • Cập nhật vị trí'
+                  : 'Lấy vị trí hiện tại',
+            ),
             style: OutlinedButton.styleFrom(
               minimumSize: const Size(0, 42),
               backgroundColor: Colors.white,
@@ -213,9 +287,11 @@ class _PharmacyCard extends StatelessWidget {
     required this.pharmacy,
     required this.onDetail,
     required this.onDirection,
+    this.distanceText,
   });
 
   final PharmacyModel pharmacy;
+  final String? distanceText;
   final VoidCallback onDetail;
   final VoidCallback onDirection;
 
@@ -260,6 +336,14 @@ class _PharmacyCard extends StatelessWidget {
                     ],
                   ),
                 ),
+                if (distanceText != null)
+                  Text(
+                    distanceText!,
+                    style: const TextStyle(
+                      color: AppTheme.primaryBlue,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
               ],
             ),
             const SizedBox(height: 14),

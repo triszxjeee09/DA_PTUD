@@ -60,6 +60,12 @@ import '../features/review/data/services/review_service.dart';
 import '../features/review/providers/review_provider.dart';
 import '../features/voucher/data/services/voucher_service.dart';
 import '../features/voucher/providers/voucher_provider.dart';
+import '../features/chat/providers/chat_provider.dart';
+import '../features/favorite/providers/favorite_provider.dart';
+import '../features/health/providers/health_provider.dart';
+import '../features/loyalty/providers/loyalty_provider.dart';
+import '../features/reminder/providers/reminder_provider.dart';
+import '../features/support/providers/support_provider.dart';
 import 'routes.dart';
 import 'theme.dart';
 
@@ -82,6 +88,36 @@ class PharmaApp extends StatelessWidget {
             onBeforeLogout: () =>
                 _deactivateCurrentDeviceToken(deviceTokenService),
           ),
+        ),
+        ChangeNotifierProxyProvider<AuthProvider, FavoriteProvider>(
+          create: (_) => FavoriteProvider(),
+          update: (_, auth, provider) =>
+              (provider ?? FavoriteProvider())..resetIfUserChanged(auth.currentUser?.id),
+        ),
+        ChangeNotifierProxyProvider<AuthProvider, ReminderProvider>(
+          create: (_) => ReminderProvider(),
+          update: (_, auth, provider) =>
+              (provider ?? ReminderProvider())..resetIfUserChanged(auth.currentUser?.id),
+        ),
+        ChangeNotifierProxyProvider<AuthProvider, HealthProvider>(
+          create: (_) => HealthProvider(),
+          update: (_, auth, provider) =>
+              (provider ?? HealthProvider())..resetIfUserChanged(auth.currentUser?.id),
+        ),
+        ChangeNotifierProxyProvider<AuthProvider, LoyaltyProvider>(
+          create: (_) => LoyaltyProvider(),
+          update: (_, auth, provider) =>
+              (provider ?? LoyaltyProvider())..resetIfUserChanged(auth.currentUser?.id),
+        ),
+        ChangeNotifierProxyProvider<AuthProvider, ChatProvider>(
+          create: (_) => ChatProvider(),
+          update: (_, auth, provider) =>
+              (provider ?? ChatProvider())..resetIfUserChanged(auth.currentUser?.id),
+        ),
+        ChangeNotifierProxyProvider<AuthProvider, SupportProvider>(
+          create: (_) => SupportProvider(),
+          update: (_, auth, provider) =>
+              (provider ?? SupportProvider())..resetIfUserChanged(auth.currentUser?.id),
         ),
         ChangeNotifierProvider(
           create: (_) => AdminDashboardProvider(

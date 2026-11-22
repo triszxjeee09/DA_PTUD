@@ -33,6 +33,11 @@ class _AdminProductFormScreenState extends State<AdminProductFormScreen> {
   final _sideEffectsController = TextEditingController();
   final _precautionsController = TextEditingController();
   final _storageInstructionsController = TextEditingController();
+  final _dosageFormController = TextEditingController();
+  final _targetAudienceController = TextEditingController();
+  final _symptomsController = TextEditingController();
+  final _manufacturerController = TextEditingController();
+  final _contraindicationsController = TextEditingController();
   final _unitController = TextEditingController();
   final _priceController = TextEditingController();
   final _originalPriceController = TextEditingController();
@@ -78,6 +83,11 @@ class _AdminProductFormScreenState extends State<AdminProductFormScreen> {
     _sideEffectsController.dispose();
     _precautionsController.dispose();
     _storageInstructionsController.dispose();
+    _dosageFormController.dispose();
+    _targetAudienceController.dispose();
+    _symptomsController.dispose();
+    _manufacturerController.dispose();
+    _contraindicationsController.dispose();
     _unitController.dispose();
     _priceController.dispose();
     _originalPriceController.dispose();
@@ -132,6 +142,11 @@ class _AdminProductFormScreenState extends State<AdminProductFormScreen> {
     _sideEffectsController.text = product.sideEffects ?? '';
     _precautionsController.text = product.precautions ?? '';
     _storageInstructionsController.text = product.storageInstructions ?? '';
+    _dosageFormController.text = product.dosageForm ?? '';
+    _targetAudienceController.text = product.targetAudience ?? '';
+    _symptomsController.text = product.symptoms ?? '';
+    _manufacturerController.text = product.manufacturer ?? '';
+    _contraindicationsController.text = product.contraindications ?? '';
     _unitController.text = product.unit;
     _priceController.text = _formatNumber(product.price);
     _originalPriceController.text = product.originalPrice == null
@@ -184,6 +199,11 @@ class _AdminProductFormScreenState extends State<AdminProductFormScreen> {
       sideEffects: _emptyToNull(_sideEffectsController.text),
       precautions: _emptyToNull(_precautionsController.text),
       storageInstructions: _emptyToNull(_storageInstructionsController.text),
+      dosageForm: _emptyToNull(_dosageFormController.text),
+      targetAudience: _emptyToNull(_targetAudienceController.text),
+      symptoms: _emptyToNull(_symptomsController.text),
+      manufacturer: _emptyToNull(_manufacturerController.text),
+      contraindications: _emptyToNull(_contraindicationsController.text),
       unit: _unitController.text.trim(),
       price: _readMoney(_priceController.text),
       originalPrice: _readNullableMoney(_originalPriceController.text),
@@ -363,6 +383,31 @@ class _AdminProductFormScreenState extends State<AdminProductFormScreen> {
                     _TextInput(
                       controller: _storageInstructionsController,
                       label: 'Bảo quản',
+                      maxLines: 3,
+                    ),
+                    _TextInput(
+                      controller: _dosageFormController,
+                      label: 'Dạng bào chế (viên nén, siro...)',
+                      maxLines: 1,
+                    ),
+                    _TextInput(
+                      controller: _targetAudienceController,
+                      label: 'Đối tượng sử dụng',
+                      maxLines: 2,
+                    ),
+                    _TextInput(
+                      controller: _symptomsController,
+                      label: 'Triệu chứng/công dụng (cách nhau dấu phẩy)',
+                      maxLines: 2,
+                    ),
+                    _TextInput(
+                      controller: _manufacturerController,
+                      label: 'Nhà sản xuất',
+                      maxLines: 1,
+                    ),
+                    _TextInput(
+                      controller: _contraindicationsController,
+                      label: 'Chống chỉ định',
                       maxLines: 3,
                     ),
                   ],

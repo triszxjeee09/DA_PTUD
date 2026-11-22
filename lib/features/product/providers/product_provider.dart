@@ -37,6 +37,7 @@ class ProductProvider extends ChangeNotifier {
     double? maxPrice,
     bool? requiresPrescription,
     bool? isFeatured,
+    Map<String, dynamic>? extraFilters,
     bool refresh = false,
   }) async {
     if (_isLoading || _isLoadingMore) {
@@ -71,6 +72,7 @@ class ProductProvider extends ChangeNotifier {
         maxPrice: maxPrice,
         requiresPrescription: requiresPrescription,
         isFeatured: isFeatured,
+        extraFilters: extraFilters,
         page: pageToLoad,
       );
 

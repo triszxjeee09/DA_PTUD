@@ -31,7 +31,7 @@ class ReviewService {
         (json) => ProductReviewModel.fromJson(_asJsonObject(json)),
       );
 
-      return _requireData(apiResponse);
+      return await _requireData(apiResponse);
     } on DioException catch (error) {
       throw _toApiException(error);
     } on ApiException {
@@ -45,11 +45,16 @@ class ReviewService {
     required String productId,
     int page = 0,
     int size = 10,
+    int? rating,
   }) {
     return _requestReviewPage(
       () => _dioClient.get<dynamic>(
         '${ApiConstants.reviews}/products/$productId',
-        queryParameters: {'page': page, 'size': size},
+        queryParameters: {
+          'page': page,
+          'size': size,
+          if (rating != null) 'rating': rating,
+        },
       ),
     );
   }
@@ -79,7 +84,7 @@ class ReviewService {
         ),
       );
 
-      return _requireData(apiResponse);
+      return await _requireData(apiResponse);
     } on DioException catch (error) {
       throw _toApiException(error);
     } on ApiException {

@@ -18,6 +18,15 @@ class ProductModel {
     this.sideEffects,
     this.precautions,
     this.storageInstructions,
+    this.dosageForm,
+    this.targetAudience,
+    this.symptoms,
+    this.manufacturer,
+    this.contraindications,
+    this.ratingAverage = 0,
+    this.reviewCount = 0,
+    this.stockQuantity,
+    this.isFavorite = false,
     required this.unit,
     this.price = 0,
     this.originalPrice,
@@ -46,6 +55,15 @@ class ProductModel {
   final String? sideEffects;
   final String? precautions;
   final String? storageInstructions;
+  final String? dosageForm;
+  final String? targetAudience;
+  final String? symptoms;
+  final String? manufacturer;
+  final String? contraindications;
+  final double ratingAverage;
+  final int reviewCount;
+  final int? stockQuantity;
+  final bool isFavorite;
   final String unit;
   final double price;
   final double? originalPrice;
@@ -75,6 +93,15 @@ class ProductModel {
       sideEffects: _readNullableString(json['sideEffects']),
       precautions: _readNullableString(json['precautions']),
       storageInstructions: _readNullableString(json['storageInstructions']),
+      dosageForm: _readNullableString(json['dosageForm']),
+      targetAudience: _readNullableString(json['targetAudience']),
+      symptoms: _readNullableString(json['symptoms']),
+      manufacturer: _readNullableString(json['manufacturer']),
+      contraindications: _readNullableString(json['contraindications']),
+      ratingAverage: _readDouble(json['ratingAverage']),
+      reviewCount: _readDouble(json['reviewCount']).round(),
+      stockQuantity: _readNullableDouble(json['stockQuantity'])?.round(),
+      isFavorite: _readBool(json['isFavorite']),
       unit: _readString(json['unit']),
       price: _readDouble(json['price']),
       originalPrice: _readNullableDouble(json['originalPrice']),
@@ -106,6 +133,15 @@ class ProductModel {
       'sideEffects': sideEffects,
       'precautions': precautions,
       'storageInstructions': storageInstructions,
+      'dosageForm': dosageForm,
+      'targetAudience': targetAudience,
+      'symptoms': symptoms,
+      'manufacturer': manufacturer,
+      'contraindications': contraindications,
+      'ratingAverage': ratingAverage,
+      'reviewCount': reviewCount,
+      'stockQuantity': stockQuantity,
+      'isFavorite': isFavorite,
       'unit': unit,
       'price': price,
       'originalPrice': originalPrice,

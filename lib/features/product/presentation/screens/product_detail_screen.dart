@@ -6,6 +6,7 @@ import '../../../../app/routes.dart';
 import '../../../../app/theme.dart';
 import '../../../../core/utils/currency_formatter.dart';
 import '../../../cart/providers/cart_provider.dart';
+import '../../../favorite/presentation/widgets/favorite_button.dart';
 import '../../../inventory/data/models/inventory_model.dart';
 import '../../../inventory/providers/inventory_provider.dart';
 import '../../../review/data/models/product_review_model.dart';
@@ -128,6 +129,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
       appBar: AppBar(
         title: const Text('Chi tiết sản phẩm'),
         actions: [
+          if (product != null) FavoriteButton(product: product),
           IconButton(
             tooltip: 'Giỏ hàng',
             onPressed: () => Navigator.of(context).pushNamed(AppRoutes.cart),
@@ -314,6 +316,11 @@ class _ProductDetailContent extends StatelessWidget {
               ),
               const SizedBox(height: 14),
               _InfoSection(
+                title: 'Thông tin chung',
+                icon: Icons.info_outline,
+                content: _generalInfo(product),
+              ),
+              _InfoSection(
                 title: 'Thành phần',
                 icon: Icons.science_outlined,
                 content: product.ingredients,
@@ -337,6 +344,11 @@ class _ProductDetailContent extends StatelessWidget {
                 title: 'Lưu ý an toàn',
                 icon: Icons.warning_amber_outlined,
                 content: _joinSafetyNotes(product),
+              ),
+              _InfoSection(
+                title: 'Chống chỉ định',
+                icon: Icons.block_outlined,
+                content: product.contraindications,
               ),
               _InfoSection(
                 title: 'Bảo quản',
@@ -849,6 +861,18 @@ class _ReviewStars extends StatelessWidget {
       }),
     );
   }
+}
+
+String? _generalInfo(ProductModel product) {
+  final lines = <String>[
+    if (product.dosageForm != null) 'Dạng bào chế: ${product.dosageForm}',
+    if (product.targetAudience != null)
+      'Đối tượng sử dụng: ${product.targetAudience}',
+    if (product.manufacturer != null)
+      'Nhà sản xuất: ${product.manufacturer}',
+    if (product.symptoms != null) 'Dùng cho: ${product.symptoms}',
+  ];
+  return lines.isEmpty ? null : lines.join('\n');
 }
 
 class _InfoSection extends StatelessWidget {

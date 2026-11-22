@@ -26,6 +26,7 @@ class ReviewProvider extends ChangeNotifier {
   int _currentPage = 0;
   bool _hasMore = true;
   String? _currentProductId;
+  int? _ratingFilter;
   _ReviewListMode? _currentMode;
 
   List<ProductReviewModel> get productReviews => _productReviews;
@@ -73,10 +74,12 @@ class ReviewProvider extends ChangeNotifier {
   Future<void> loadReviewsByProduct({
     required String productId,
     bool refresh = false,
+    int? rating,
   }) async {
     final productChanged =
         _currentMode != _ReviewListMode.product ||
-        _currentProductId != productId;
+        _currentProductId != productId ||
+        _ratingFilter != rating;
 
     if (_isLoading || _isLoadingMore) {
       return;
@@ -87,6 +90,7 @@ class ReviewProvider extends ChangeNotifier {
       _currentPage = 0;
       _hasMore = true;
       _currentProductId = productId;
+      _ratingFilter = rating;
       _currentMode = _ReviewListMode.product;
       _errorMessage = null;
       notifyListeners();
@@ -108,6 +112,7 @@ class ReviewProvider extends ChangeNotifier {
         productId: productId,
         page: pageToLoad,
         size: _pageSize,
+        rating: rating,
       );
 
       _productReviews = pageToLoad == 0

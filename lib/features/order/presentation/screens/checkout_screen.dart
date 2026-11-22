@@ -276,6 +276,14 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       return;
     }
 
+    if (_selectedPayment.value == 'BANK_TRANSFER') {
+      Navigator.of(context).pushReplacementNamed(
+        AppRoutes.bankTransfer,
+        arguments: {'orderId': order.id, 'orderCode': order.orderCode},
+      );
+      return;
+    }
+
     Navigator.of(
       context,
     ).pushReplacementNamed(AppRoutes.orderSuccess, arguments: {'order': order});
@@ -768,7 +776,7 @@ class _PaymentOptionTile extends StatelessWidget {
       subtitle: option.isAvailable
           ? null
           : const Text(
-              'Đang phát triển',
+              'Chưa hỗ trợ (cần cấu hình merchant)',
               style: TextStyle(color: AppTheme.textSecondary),
             ),
     );
@@ -1254,8 +1262,7 @@ enum _PaymentOption {
   final String label;
   final String value;
 
-  bool get isAvailable =>
-      this == _PaymentOption.cod || this == _PaymentOption.vnpay;
+  bool get isAvailable => this != _PaymentOption.momo;
 
   String get displayLabel {
     return switch (this) {

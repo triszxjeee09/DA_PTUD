@@ -13,6 +13,11 @@ class NotificationNavigationHandler {
     AppRoutes.prescriptionDetail,
     AppRoutes.applyVoucher,
     AppRoutes.vouchers,
+    AppRoutes.reminders,
+    AppRoutes.chat,
+    AppRoutes.loyalty,
+    AppRoutes.productDetail,
+    AppRoutes.supportTicketDetail,
   };
 
   static void handleMessageNavigation(
@@ -69,6 +74,31 @@ class NotificationNavigationHandler {
         if (referenceId != null) {
           return _NotificationRoute(
             routeName: AppRoutes.prescriptionDetail,
+            arguments: {'id': referenceId},
+          );
+        }
+        return const _NotificationRoute(routeName: AppRoutes.notifications);
+      case 'MEDICATION_REMINDER':
+        return const _NotificationRoute(routeName: AppRoutes.reminders);
+      case 'CONSULTATION':
+        return const _NotificationRoute(
+          routeName: AppRoutes.chat,
+          arguments: {'tab': 1},
+        );
+      case 'LOYALTY':
+        return const _NotificationRoute(routeName: AppRoutes.loyalty);
+      case 'SUPPORT':
+        if (referenceId != null) {
+          return _NotificationRoute(
+            routeName: AppRoutes.supportTicketDetail,
+            arguments: {'ticketId': referenceId},
+          );
+        }
+        return const _NotificationRoute(routeName: AppRoutes.notifications);
+      case 'STOCK':
+        if (referenceId != null) {
+          return _NotificationRoute(
+            routeName: AppRoutes.productDetail,
             arguments: {'id': referenceId},
           );
         }

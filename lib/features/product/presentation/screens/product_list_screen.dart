@@ -6,8 +6,10 @@ import '../../../../app/routes.dart';
 import '../../../../app/theme.dart';
 import '../../../../core/utils/currency_formatter.dart';
 import '../../../cart/providers/cart_provider.dart';
+import '../../../favorite/presentation/widgets/favorite_button.dart';
 import '../../data/models/product_model.dart';
 import '../../providers/product_provider.dart';
+import '../widgets/product_filter_sheet.dart';
 
 enum _ProductQuickFilter {
   all('Tất cả'),
@@ -36,6 +38,7 @@ class _ProductListScreenState extends State<ProductListScreen> {
   final Set<String> _addingProductIds = <String>{};
 
   _ProductQuickFilter _selectedFilter = _ProductQuickFilter.all;
+  Map<String, dynamic> _advancedFilters = <String, dynamic>{};
 
   String? get _categoryId => widget.arguments?['categoryId']?.toString();
   String? get _brandId => widget.arguments?['brandId']?.toString();
@@ -93,8 +96,18 @@ class _ProductListScreenState extends State<ProductListScreen> {
       isFeatured: _selectedFilter == _ProductQuickFilter.bestSeller
           ? true
           : null,
+      extraFilters: _advancedFilters.isEmpty ? null : _advancedFilters,
       refresh: refresh,
     );
+  }
+
+  Future<void> _openFilters() async {
+    final result = await ProductFilterSheet.show(context, _advancedFilters);
+    if (result == null || !mounted) {
+      return;
+    }
+    setState(() => _advancedFilters = result);
+    await _loadProducts(refresh: true);
   }
 
   Future<void> _addToCart(ProductModel product) async {
@@ -151,16 +164,21 @@ class _ProductListScreenState extends State<ProductListScreen> {
     return Scaffold(
       backgroundColor: const Color(0xFFF6F9FF),
       appBar: AppBar(
-        title: const Text('Sản phẩm'),
+        title: Text(
+          widget.arguments?['categoryName']?.toString().trim().isNotEmpty ==
+                  true
+              ? widget.arguments!['categoryName'].toString()
+              : 'Sản phẩm',
+        ),
         actions: [
           IconButton(
             tooltip: 'Bộ lọc',
-            onPressed: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Chức năng đang phát triển')),
-              );
-            },
-            icon: const Icon(Icons.tune),
+            onPressed: _openFilters,
+            icon: Badge(
+              isLabelVisible: _advancedFilters.isNotEmpty,
+              label: Text('${_advancedFilters.length}'),
+              child: const Icon(Icons.tune),
+            ),
           ),
         ],
       ),
@@ -352,6 +370,11 @@ class _ProductGridCard extends StatelessWidget {
                           color: AppTheme.error,
                         ),
                       ),
+                    Positioned(
+                      top: 4,
+                      right: 4,
+                      child: FavoriteButton(product: product, compact: true),
+                    ),
                   ],
                 ),
               ),

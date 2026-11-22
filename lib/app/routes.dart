@@ -1,6 +1,31 @@
 import 'package:flutter/material.dart';
 
 import 'main_navigation_screen.dart';
+import '../core/widgets/require_auth.dart';
+import '../features/chat/data/chat_models.dart';
+import '../features/chat/presentation/screens/chat_screen.dart';
+import '../features/chat/presentation/screens/staff_chat_screen.dart';
+import '../features/favorite/presentation/screens/favorites_screen.dart';
+import '../features/health/data/models/health_member.dart';
+import '../features/health/data/models/health_metric.dart';
+import '../features/health/presentation/screens/health_member_form_screen.dart';
+import '../features/health/presentation/screens/health_metric_screen.dart';
+import '../features/health/presentation/screens/health_profile_screen.dart';
+import '../features/health/presentation/screens/health_tools_screen.dart';
+import '../features/loyalty/presentation/screens/loyalty_screen.dart';
+import '../features/order/presentation/screens/frequent_products_screen.dart';
+import '../features/order/presentation/screens/invoice_screen.dart';
+import '../features/payment/presentation/screens/bank_transfer_screen.dart';
+import '../features/payment/presentation/screens/payment_history_screen.dart';
+import '../features/pharmacist/presentation/screens/pharmacist_main_screen.dart';
+import '../features/review/presentation/screens/my_reviews_screen.dart';
+import '../features/settings/presentation/screens/settings_screen.dart';
+import '../features/reminder/data/models/medication_reminder.dart';
+import '../features/reminder/presentation/screens/reminder_form_screen.dart';
+import '../features/reminder/presentation/screens/reminder_screen.dart';
+import '../features/support/presentation/screens/help_center_screen.dart';
+import '../features/support/presentation/screens/support_ticket_screens.dart';
+import '../features/voucher/presentation/screens/voucher_list_screen.dart';
 import '../core/widgets/require_admin.dart';
 import '../features/account/data/models/user_address_model.dart';
 import '../features/account/presentation/screens/add_edit_address_screen.dart';
@@ -15,6 +40,7 @@ import '../features/admin/presentation/screens/admin_inventory_screen.dart';
 import '../features/admin/presentation/screens/admin_dashboard_screen.dart';
 import '../features/admin/presentation/screens/admin_main_screen.dart';
 import '../features/admin/presentation/screens/admin_more_screen.dart';
+import '../features/admin/presentation/screens/admin_order_detail_screen.dart';
 import '../features/admin/presentation/screens/admin_order_screen.dart';
 import '../features/admin/presentation/screens/admin_pharmacy_form_screen.dart';
 import '../features/admin/presentation/screens/admin_pharmacy_screen.dart';
@@ -121,6 +147,26 @@ class AppRoutes {
   static const String prescriptionSelect = '/prescriptions/select';
   static const String writeReview = '/reviews/write';
   static const String productReviews = '/reviews/product';
+  static const String paymentHistory = '/payment/history';
+  static const String myReviews = '/reviews/mine';
+  static const String appSettings = '/settings';
+  static const String reminders = '/reminders';
+  static const String reminderForm = '/reminders/form';
+  static const String healthTools = '/health';
+  static const String healthProfile = '/health/profile';
+  static const String healthMemberForm = '/health/profile/form';
+  static const String healthMetric = '/health/metric';
+  static const String favorites = '/favorites';
+  static const String loyalty = '/loyalty';
+  static const String frequentProducts = '/orders/frequent';
+  static const String invoice = '/orders/invoice';
+  static const String bankTransfer = '/payment/bank-transfer';
+  static const String chat = '/chat';
+  static const String staffChat = '/staff/chat';
+  static const String helpCenter = '/support';
+  static const String supportTickets = '/support/tickets';
+  static const String supportTicketForm = '/support/tickets/form';
+  static const String supportTicketDetail = '/support/tickets/detail';
 
   static String authenticatedHomeForUser(UserModel? user) {
     if (user?.isAdmin ?? false) {
@@ -202,9 +248,10 @@ class AppRoutes {
       case adminOrderDetail:
         return MaterialPageRoute(
           builder: (_) => _requireAdmin(
-            const PlaceholderRouteScreen(
-              title: 'Chi tiết đơn hàng Admin',
-              message: 'Màn hình chi tiết đơn hàng Admin đang được cập nhật.',
+            AdminOrderDetailScreen(
+              orderId:
+                  _readArguments(settings.arguments)?['orderId']?.toString() ??
+                  '',
             ),
           ),
           settings: settings,
@@ -377,10 +424,7 @@ class AppRoutes {
         );
       case vouchers:
         return MaterialPageRoute(
-          builder: (_) => const PlaceholderRouteScreen(
-            title: 'Khuyến mãi',
-            message: 'Chức năng khuyến mãi đang được cập nhật.',
-          ),
+          builder: (_) => const VoucherListScreen(),
           settings: settings,
         );
       case applyVoucher:
@@ -559,6 +603,153 @@ class AppRoutes {
           ),
           settings: settings,
         );
+      case paymentHistory:
+        return MaterialPageRoute(
+          builder: (_) => const RequireAuth(child: PaymentHistoryScreen()),
+          settings: settings,
+        );
+      case myReviews:
+        return MaterialPageRoute(
+          builder: (_) => const RequireAuth(child: MyReviewsScreen()),
+          settings: settings,
+        );
+      case appSettings:
+        return MaterialPageRoute(
+          builder: (_) => const SettingsScreen(),
+          settings: settings,
+        );
+      case reminders:
+        return MaterialPageRoute(
+          builder: (_) => const RequireAuth(child: ReminderScreen()),
+          settings: settings,
+        );
+      case reminderForm:
+        final reminderArgs = _readArguments(settings.arguments);
+        final editing = reminderArgs?['reminder'];
+        return MaterialPageRoute(
+          builder: (_) => RequireAuth(
+            child: ReminderFormScreen(
+              reminder: editing is MedicationReminder ? editing : null,
+            ),
+          ),
+          settings: settings,
+        );
+      case healthTools:
+        return MaterialPageRoute(
+          builder: (_) => const HealthToolsScreen(),
+          settings: settings,
+        );
+      case healthProfile:
+        return MaterialPageRoute(
+          builder: (_) => const RequireAuth(child: HealthProfileScreen()),
+          settings: settings,
+        );
+      case healthMemberForm:
+        final memberArgs = _readArguments(settings.arguments);
+        final member = memberArgs?['member'];
+        return MaterialPageRoute(
+          builder: (_) => RequireAuth(
+            child: HealthMemberFormScreen(
+              member: member is HealthMember ? member : null,
+            ),
+          ),
+          settings: settings,
+        );
+      case healthMetric:
+        final metricArgs = _readArguments(settings.arguments);
+        return MaterialPageRoute(
+          builder: (_) => RequireAuth(
+            child: HealthMetricScreen(
+              type: metricArgs?['type']?.toString() ?? HealthMetric.bloodPressure,
+              memberId: metricArgs?['memberId']?.toString(),
+            ),
+          ),
+          settings: settings,
+        );
+      case favorites:
+        return MaterialPageRoute(
+          builder: (_) => const RequireAuth(child: FavoritesScreen()),
+          settings: settings,
+        );
+      case loyalty:
+        return MaterialPageRoute(
+          builder: (_) => const RequireAuth(child: LoyaltyScreen()),
+          settings: settings,
+        );
+      case frequentProducts:
+        return MaterialPageRoute(
+          builder: (_) => const RequireAuth(child: FrequentProductsScreen()),
+          settings: settings,
+        );
+      case invoice:
+        final invoiceArgs = _readArguments(settings.arguments);
+        return MaterialPageRoute(
+          builder: (_) => RequireAuth(
+            child: InvoiceScreen(orderId: invoiceArgs?['orderId']?.toString() ?? ''),
+          ),
+          settings: settings,
+        );
+      case bankTransfer:
+        final bankArgs = _readArguments(settings.arguments);
+        return MaterialPageRoute(
+          builder: (_) => RequireAuth(
+            child: BankTransferScreen(
+              orderId: bankArgs?['orderId']?.toString() ?? '',
+              orderCode: bankArgs?['orderCode']?.toString() ?? '',
+            ),
+          ),
+          settings: settings,
+        );
+      case chat:
+        final chatArgs = _readArguments(settings.arguments);
+        return MaterialPageRoute(
+          builder: (_) => RequireAuth(
+            child: ChatScreen(
+              initialTab: int.tryParse('${chatArgs?['tab'] ?? 0}') ?? 0,
+            ),
+          ),
+          settings: settings,
+        );
+      case staffChat:
+        final staffArgs = _readArguments(settings.arguments);
+        final conversation = staffArgs?['conversation'];
+        return MaterialPageRoute(
+          builder: (_) => conversation is ChatConversation
+              ? StaffChatScreen(conversation: conversation)
+              : const UnknownRouteScreen(),
+          settings: settings,
+        );
+      case helpCenter:
+        return MaterialPageRoute(
+          builder: (_) => const HelpCenterScreen(),
+          settings: settings,
+        );
+      case supportTickets:
+        return MaterialPageRoute(
+          builder: (_) => const RequireAuth(child: SupportTicketListScreen()),
+          settings: settings,
+        );
+      case supportTicketForm:
+        final ticketFormArgs = _readArguments(settings.arguments);
+        return MaterialPageRoute(
+          builder: (_) => RequireAuth(
+            child: SupportTicketFormScreen(
+              orderId: ticketFormArgs?['orderId']?.toString(),
+            ),
+          ),
+          settings: settings,
+        );
+      case supportTicketDetail:
+        final ticketArgs = _readArguments(settings.arguments);
+        return MaterialPageRoute(
+          builder: (_) => RequireAuth(
+            child: SupportTicketDetailScreen(
+              ticketId: ticketArgs?['ticketId']?.toString() ?? '',
+              staffMode: ticketArgs?['staff'] == true,
+            ),
+          ),
+          settings: settings,
+        );
       default:
         return MaterialPageRoute(
           builder: (_) => const UnknownRouteScreen(),
@@ -601,18 +792,6 @@ class AppRoutes {
     }
 
     return null;
-  }
-}
-
-class PharmacistMainScreen extends StatelessWidget {
-  const PharmacistMainScreen({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return const PlaceholderRouteScreen(
-      title: 'Dược sĩ',
-      message: 'Màn hình dược sĩ đang được cập nhật.',
-    );
   }
 }
 

@@ -37,12 +37,6 @@ class _HomeScreenState extends State<HomeScreen> {
     });
   }
 
-  void _showComingSoon() {
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(const SnackBar(content: Text('Chức năng đang phát triển')));
-  }
-
   @override
   Widget build(BuildContext context) {
     final user = context.watch<AuthProvider>().currentUser;
@@ -86,11 +80,17 @@ class _HomeScreenState extends State<HomeScreen> {
                       const _PrescriptionBanner(),
                       const SizedBox(height: 22),
                       _QuickActions(
-                        onPrescriptionTap: _showComingSoon,
+                        onPrescriptionTap: () {
+                          Navigator.of(
+                            context,
+                          ).pushNamed(AppRoutes.prescriptionUpload);
+                        },
                         onPharmacyTap: () {
                           Navigator.of(context).pushNamed(AppRoutes.pharmacies);
                         },
                       ),
+                      const SizedBox(height: 14),
+                      const _HealthUtilities(),
                       const SizedBox(height: 28),
                       const _CategorySection(),
                       const SizedBox(height: 28),
@@ -297,12 +297,12 @@ class _QuickActions extends StatelessWidget {
       _QuickActionData(
         label: 'Theo dõi đơn hàng',
         icon: Icons.receipt_long_outlined,
-        onTap: () => _showComingSoon(context),
+        onTap: () => Navigator.of(context).pushNamed(AppRoutes.orders),
       ),
       _QuickActionData(
         label: 'Tư vấn dược sĩ',
         icon: Icons.support_agent_outlined,
-        onTap: () => _showComingSoon(context),
+        onTap: () => Navigator.of(context).pushNamed(AppRoutes.chat),
       ),
     ];
 
@@ -313,10 +313,42 @@ class _QuickActions extends StatelessWidget {
     );
   }
 
-  void _showComingSoon(BuildContext context) {
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(const SnackBar(content: Text('Chức năng đang phát triển')));
+}
+
+/// Hàng tiện ích sức khỏe: nhắc thuốc, công cụ sức khỏe, yêu thích, trợ giúp.
+class _HealthUtilities extends StatelessWidget {
+  const _HealthUtilities();
+
+  @override
+  Widget build(BuildContext context) {
+    final actions = [
+      _QuickActionData(
+        label: 'Nhắc uống thuốc',
+        icon: Icons.alarm_outlined,
+        onTap: () => Navigator.of(context).pushNamed(AppRoutes.reminders),
+      ),
+      _QuickActionData(
+        label: 'Sức khỏe',
+        icon: Icons.monitor_heart_outlined,
+        onTap: () => Navigator.of(context).pushNamed(AppRoutes.healthTools),
+      ),
+      _QuickActionData(
+        label: 'Yêu thích',
+        icon: Icons.favorite_border,
+        onTap: () => Navigator.of(context).pushNamed(AppRoutes.favorites),
+      ),
+      _QuickActionData(
+        label: 'Điểm thưởng',
+        icon: Icons.card_giftcard_outlined,
+        onTap: () => Navigator.of(context).pushNamed(AppRoutes.loyalty),
+      ),
+    ];
+
+    return Row(
+      children: actions
+          .map((action) => Expanded(child: _QuickActionButton(data: action)))
+          .toList(),
+    );
   }
 }
 

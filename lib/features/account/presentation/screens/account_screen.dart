@@ -14,6 +14,16 @@ class AccountScreen extends StatelessWidget {
     AppRoutes.orders,
     AppRoutes.prescriptions,
     AppRoutes.notifications,
+    AppRoutes.paymentHistory,
+    AppRoutes.myReviews,
+    AppRoutes.appSettings,
+    AppRoutes.favorites,
+    AppRoutes.reminders,
+    AppRoutes.healthTools,
+    AppRoutes.loyalty,
+    AppRoutes.frequentProducts,
+    AppRoutes.helpCenter,
+    AppRoutes.chat,
   };
 
   @override
@@ -71,12 +81,45 @@ class AccountScreen extends StatelessWidget {
                   _AccountMenuItem(
                     icon: Icons.payments_outlined,
                     title: 'Lịch sử thanh toán',
-                    onTap: () => _openDevelopingFeature(context),
+                    onTap: () =>
+                        _openRouteSafely(context, AppRoutes.paymentHistory),
+                  ),
+                  _AccountMenuItem(
+                    icon: Icons.favorite_border_rounded,
+                    title: 'Sản phẩm yêu thích',
+                    onTap: () => _openRouteSafely(context, AppRoutes.favorites),
+                  ),
+                  _AccountMenuItem(
+                    icon: Icons.history_rounded,
+                    title: 'Thuốc thường dùng',
+                    onTap: () =>
+                        _openRouteSafely(context, AppRoutes.frequentProducts),
+                  ),
+                  _AccountMenuItem(
+                    icon: Icons.alarm_rounded,
+                    title: 'Nhắc uống thuốc',
+                    onTap: () => _openRouteSafely(context, AppRoutes.reminders),
+                  ),
+                  _AccountMenuItem(
+                    icon: Icons.monitor_heart_outlined,
+                    title: 'Sức khỏe gia đình',
+                    onTap: () =>
+                        _openRouteSafely(context, AppRoutes.healthTools),
+                  ),
+                  _AccountMenuItem(
+                    icon: Icons.card_giftcard_rounded,
+                    title: 'Điểm thưởng & hạng thành viên',
+                    onTap: () => _openRouteSafely(context, AppRoutes.loyalty),
                   ),
                   _AccountMenuItem(
                     icon: Icons.star_outline_rounded,
                     title: 'Đánh giá của tôi',
-                    onTap: () => _openDevelopingFeature(context),
+                    onTap: () => _openRouteSafely(context, AppRoutes.myReviews),
+                  ),
+                  _AccountMenuItem(
+                    icon: Icons.support_agent_outlined,
+                    title: 'Trung tâm trợ giúp',
+                    onTap: () => _openRouteSafely(context, AppRoutes.helpCenter),
                   ),
                   _AccountMenuItem(
                     icon: Icons.notifications_none_rounded,
@@ -87,7 +130,8 @@ class AccountScreen extends StatelessWidget {
                   _AccountMenuItem(
                     icon: Icons.settings_outlined,
                     title: 'Cài đặt',
-                    onTap: () => _openDevelopingFeature(context),
+                    onTap: () =>
+                        _openRouteSafely(context, AppRoutes.appSettings),
                   ),
                   _AccountMenuItem(
                     icon: Icons.logout_rounded,

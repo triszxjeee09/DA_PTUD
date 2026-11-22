@@ -4,8 +4,10 @@ import 'package:provider/provider.dart';
 
 import '../../../../app/routes.dart';
 import '../../../../app/theme.dart';
+import '../../../../core/network/json_api.dart';
 import '../../../../core/utils/currency_formatter.dart';
 import '../../../../core/utils/date_formatter.dart';
+import '../../../cart/providers/cart_provider.dart';
 import '../../../payment/providers/payment_provider.dart';
 import '../../data/models/order_detail_model.dart';
 import '../../data/models/order_item_model.dart';
@@ -733,6 +735,29 @@ class _OrderActions extends StatelessWidget {
   final VoidCallback onTrack;
   final VoidCallback onCancel;
 
+  Future<void> _reorder(BuildContext context) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final navigator = Navigator.of(context);
+    final cart = context.read<CartProvider>();
+    try {
+      final result = JsonApi.asMap(
+        await JsonApi().post('/orders/${order.id}/reorder'),
+      );
+      await cart.loadCart();
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text((result['message'] ?? 'Đã thêm vào giỏ hàng').toString()),
+          action: SnackBarAction(
+            label: 'Xem giỏ',
+            onPressed: () => navigator.pushNamed(AppRoutes.cart),
+          ),
+        ),
+      );
+    } catch (error) {
+      messenger.showSnackBar(SnackBar(content: Text(JsonApi.message(error))));
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final canCancel = const {
@@ -747,6 +772,29 @@ class _OrderActions extends StatelessWidget {
           onPressed: onTrack,
           icon: const Icon(Icons.local_shipping_outlined),
           label: const Text('Theo dõi đơn hàng'),
+        ),
+        const SizedBox(height: 10),
+        Row(
+          children: [
+            Expanded(
+              child: OutlinedButton.icon(
+                onPressed: () => Navigator.of(context).pushNamed(
+                  AppRoutes.invoice,
+                  arguments: {'orderId': order.id},
+                ),
+                icon: const Icon(Icons.receipt_long_outlined),
+                label: const Text('Hóa đơn'),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: OutlinedButton.icon(
+                onPressed: () => _reorder(context),
+                icon: const Icon(Icons.replay),
+                label: const Text('Mua lại'),
+              ),
+            ),
+          ],
         ),
         if (canCancel) ...[
           const SizedBox(height: 10),

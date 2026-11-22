@@ -9,6 +9,8 @@ class ProductReviewModel {
     this.orderId,
     this.rating = 0,
     this.comment,
+    this.imageUrls = const [],
+    this.staffReply,
     this.isVisible = true,
     this.createdAt,
     this.updatedAt,
@@ -23,6 +25,8 @@ class ProductReviewModel {
   final String? orderId;
   final int rating;
   final String? comment;
+  final List<String> imageUrls;
+  final String? staffReply;
   final bool isVisible;
   final DateTime? createdAt;
   final DateTime? updatedAt;
@@ -38,6 +42,10 @@ class ProductReviewModel {
       orderId: _readNullableString(json['orderId']),
       rating: _readInt(json['rating']),
       comment: _readNullableString(json['comment']),
+      imageUrls: json['imageUrls'] is List
+          ? (json['imageUrls'] as List).map((e) => e.toString()).toList()
+          : const [],
+      staffReply: _readNullableString(json['staffReply']),
       isVisible: _readBool(json['isVisible'], fallback: true),
       createdAt: _readDateTime(json['createdAt']),
       updatedAt: _readDateTime(json['updatedAt']),
@@ -55,6 +63,8 @@ class ProductReviewModel {
       'orderId': orderId,
       'rating': rating,
       'comment': comment,
+      'imageUrls': imageUrls,
+      'staffReply': staffReply,
       'isVisible': isVisible,
       'createdAt': createdAt?.toIso8601String(),
       'updatedAt': updatedAt?.toIso8601String(),

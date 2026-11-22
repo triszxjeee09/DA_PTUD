@@ -13,6 +13,11 @@ class AdminProductRequestModel {
     this.sideEffects,
     this.precautions,
     this.storageInstructions,
+    this.dosageForm,
+    this.targetAudience,
+    this.symptoms,
+    this.manufacturer,
+    this.contraindications,
     required this.unit,
     required this.price,
     this.originalPrice,
@@ -34,6 +39,11 @@ class AdminProductRequestModel {
   final String? sideEffects;
   final String? precautions;
   final String? storageInstructions;
+  final String? dosageForm;
+  final String? targetAudience;
+  final String? symptoms;
+  final String? manufacturer;
+  final String? contraindications;
   final String unit;
   final double price;
   final double? originalPrice;
@@ -56,6 +66,11 @@ class AdminProductRequestModel {
       'sideEffects': sideEffects,
       'precautions': precautions,
       'storageInstructions': storageInstructions,
+      'dosageForm': dosageForm,
+      'targetAudience': targetAudience,
+      'symptoms': symptoms,
+      'manufacturer': manufacturer,
+      'contraindications': contraindications,
       'unit': unit,
       'price': price,
       'originalPrice': originalPrice,

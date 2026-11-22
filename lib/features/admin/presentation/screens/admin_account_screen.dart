@@ -79,13 +79,9 @@ class AdminAccountScreen extends StatelessWidget {
                   icon: Icons.person_rounded,
                   title: 'Thông tin cá nhân',
                   subtitle: 'Xem thông tin tài khoản quản trị',
-                  onTap: () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Chức năng đang được cập nhật.'),
-                      ),
-                    );
-                  },
+                  onTap: () => Navigator.of(
+                    context,
+                  ).pushNamed(AppRoutes.accountProfile),
                 ),
                 const Divider(height: 1),
                 _MenuTile(

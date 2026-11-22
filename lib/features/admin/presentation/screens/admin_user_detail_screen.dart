@@ -7,6 +7,7 @@ import '../../../../core/widgets/app_loading.dart';
 import '../../../auth/providers/auth_provider.dart';
 import '../../data/models/admin_user_model.dart';
 import '../../providers/admin_user_provider.dart';
+import '../widgets/admin_user_loyalty_card.dart';
 
 class AdminUserDetailScreen extends StatefulWidget {
   const AdminUserDetailScreen({super.key, required this.userId});
@@ -418,6 +419,8 @@ class _AdminUserDetailScreenState extends State<AdminUserDetailScreen> {
                 _UserHeader(user: user),
                 const SizedBox(height: 16),
                 _InfoCard(user: user),
+                const SizedBox(height: 14),
+                AdminUserLoyaltyCard(userId: user.id),
                 const SizedBox(height: 16),
                 _AccountActionsSection(
                   user: user,
@@ -1274,8 +1277,6 @@ String authProviderLabel(String? authProvider) {
   switch (authProvider?.trim().toUpperCase()) {
     case 'LOCAL':
       return 'Tài khoản thường';
-    case 'GOOGLE':
-      return 'Google';
     case null:
     case '':
       return 'Chưa cập nhật';

@@ -124,6 +124,33 @@ class _NotificationScreenState extends State<NotificationScreen> {
       case 'PROMOTION':
         Navigator.of(context).pushNamed(AppRoutes.vouchers);
         return;
+      case 'STOCK':
+        if (referenceId != null && referenceId.isNotEmpty) {
+          Navigator.of(context).pushNamed(
+            AppRoutes.productDetail,
+            arguments: {'id': referenceId},
+          );
+          return;
+        }
+        break;
+      case 'MEDICATION_REMINDER':
+        Navigator.of(context).pushNamed(AppRoutes.reminders);
+        return;
+      case 'CONSULTATION':
+        Navigator.of(context).pushNamed(AppRoutes.chat, arguments: {'tab': 1});
+        return;
+      case 'LOYALTY':
+        Navigator.of(context).pushNamed(AppRoutes.loyalty);
+        return;
+      case 'SUPPORT':
+        if (referenceId != null && referenceId.isNotEmpty) {
+          Navigator.of(context).pushNamed(
+            AppRoutes.supportTicketDetail,
+            arguments: {'ticketId': referenceId},
+          );
+          return;
+        }
+        break;
       case 'SYSTEM':
         _showDetailDialog(notification);
         return;

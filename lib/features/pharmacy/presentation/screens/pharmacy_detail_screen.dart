@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 
 import '../../../../app/routes.dart';
 import '../../../../app/theme.dart';
+import '../../../../core/location/map_launcher.dart';
 import '../../../../core/widgets/app_empty_state.dart';
 import '../../../../core/widgets/app_loading.dart';
 import '../../../inventory/data/models/inventory_model.dart';
@@ -42,18 +43,28 @@ class _PharmacyDetailScreenState extends State<PharmacyDetailScreen> {
       ..showSnackBar(SnackBar(content: Text(message)));
   }
 
-  void _callPharmacy(PharmacyModel pharmacy) {
+  Future<void> _callPharmacy(PharmacyModel pharmacy) async {
     final phone = pharmacy.phone?.trim();
     if (phone == null || phone.isEmpty) {
       _showSnackBar('Nhà thuốc chưa cập nhật số điện thoại');
       return;
     }
 
-    _showSnackBar('Số điện thoại nhà thuốc: $phone');
+    final opened = await MapLauncher.call(phone);
+    if (!opened && mounted) {
+      _showSnackBar('Không thể gọi tự động. Số điện thoại nhà thuốc: $phone');
+    }
   }
 
-  void _openDirection(PharmacyModel pharmacy) {
-    _showSnackBar('Chức năng chỉ đường đang phát triển');
+  Future<void> _openDirection(PharmacyModel pharmacy) async {
+    final opened = await MapLauncher.openDirections(
+      latitude: pharmacy.latitude,
+      longitude: pharmacy.longitude,
+      address: pharmacy.fullAddress ?? pharmacy.address,
+    );
+    if (!opened && mounted) {
+      _showSnackBar('Không thể mở ứng dụng bản đồ');
+    }
   }
 
   @override

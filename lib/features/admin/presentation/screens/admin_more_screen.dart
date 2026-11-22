@@ -60,7 +60,8 @@ class AdminMoreScreen extends StatelessWidget {
       const _AdminMenuItem(
         icon: Icons.settings_rounded,
         title: 'Cài đặt hệ thống',
-        description: 'Các thiết lập vận hành đang được cập nhật',
+        description: 'Kiểm tra kết nối API, đồng bộ dữ liệu, thông báo FCM',
+        routeName: AppRoutes.appSettings,
       ),
     ];
 

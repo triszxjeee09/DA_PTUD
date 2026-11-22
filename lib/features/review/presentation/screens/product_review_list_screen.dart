@@ -21,6 +21,7 @@ class ProductReviewListScreen extends StatefulWidget {
 
 class _ProductReviewListScreenState extends State<ProductReviewListScreen> {
   late final ScrollController _scrollController;
+  int? _ratingFilter;
 
   @override
   void initState() {
@@ -60,6 +61,7 @@ class _ProductReviewListScreenState extends State<ProductReviewListScreen> {
     return context.read<ReviewProvider>().loadReviewsByProduct(
       productId: widget.productId,
       refresh: refresh,
+      rating: _ratingFilter,
     );
   }
 
@@ -72,9 +74,39 @@ class _ProductReviewListScreenState extends State<ProductReviewListScreen> {
       appBar: AppBar(title: const Text('Đánh giá sản phẩm')),
       body: widget.productId.isEmpty
           ? const _ReviewErrorView(message: 'Không tìm thấy sản phẩm.')
-          : RefreshIndicator(
-              onRefresh: () => _loadReviews(refresh: true),
-              child: _buildBody(provider, reviews),
+          : Column(
+              children: [
+                SizedBox(
+                  height: 52,
+                  child: ListView(
+                    scrollDirection: Axis.horizontal,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 8,
+                    ),
+                    children: [
+                      for (final value in const <int?>[null, 5, 4, 3, 2, 1])
+                        Padding(
+                          padding: const EdgeInsets.only(right: 8),
+                          child: ChoiceChip(
+                            label: Text(value == null ? 'Tất cả' : '$value sao'),
+                            selected: _ratingFilter == value,
+                            onSelected: (_) {
+                              setState(() => _ratingFilter = value);
+                              _loadReviews(refresh: true);
+                            },
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+                Expanded(
+                  child: RefreshIndicator(
+                    onRefresh: () => _loadReviews(refresh: true),
+                    child: _buildBody(provider, reviews),
+                  ),
+                ),
+              ],
             ),
     );
   }
@@ -239,6 +271,58 @@ class _ReviewCard extends StatelessWidget {
             if (review.comment?.trim().isNotEmpty == true) ...[
               const SizedBox(height: 12),
               Text(review.comment!.trim(), style: const TextStyle(height: 1.4)),
+            ],
+            if (review.imageUrls.isNotEmpty) ...[
+              const SizedBox(height: 10),
+              SizedBox(
+                height: 72,
+                child: ListView(
+                  scrollDirection: Axis.horizontal,
+                  children: [
+                    for (final url in review.imageUrls)
+                      Padding(
+                        padding: const EdgeInsets.only(right: 8),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(10),
+                          child: CachedNetworkImage(
+                            imageUrl: url,
+                            width: 72,
+                            height: 72,
+                            fit: BoxFit.cover,
+                            errorWidget: (_, __, ___) =>
+                                const Icon(Icons.broken_image_outlined),
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ],
+            if (review.staffReply?.trim().isNotEmpty == true) ...[
+              const SizedBox(height: 12),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: AppTheme.lightBlue,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Phản hồi từ nhà thuốc',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w800,
+                        color: AppTheme.primaryBlue,
+                        fontSize: 12.5,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(review.staffReply!.trim()),
+                  ],
+                ),
+              ),
             ],
           ],
         ),

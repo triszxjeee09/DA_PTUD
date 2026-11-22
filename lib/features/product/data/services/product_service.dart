@@ -1,6 +1,7 @@
 import 'package:dio/dio.dart';
 
 import '../../../../core/constants/api_constants.dart';
+import '../../../../core/database/local_json_cache.dart';
 import '../../../../core/errors/api_exception.dart';
 import '../../../../core/network/api_response.dart';
 import '../../../../core/network/dio_client.dart';
@@ -8,14 +9,16 @@ import '../../../../core/network/page_response.dart';
 import '../models/product_model.dart';
 
 class ProductService {
-  ProductService({DioClient? dioClient, Dio? dio})
-    : _dioClient = dioClient ?? DioClient(dio: dio);
+  ProductService({DioClient? dioClient, Dio? dio, JsonCache? localCache})
+    : _dioClient = dioClient ?? DioClient(dio: dio),
+      _localCache = localCache ?? LocalJsonCache.instance;
 
   static const String _connectionErrorMessage = 'Không thể kết nối đến máy chủ';
   static const String _defaultErrorMessage =
       'Đã có lỗi xảy ra, vui lòng thử lại';
 
   final DioClient _dioClient;
+  final JsonCache _localCache;
 
   Future<PageResponse<ProductModel>> getProducts({
     String? keyword,
@@ -29,6 +32,7 @@ class ProductService {
     int size = 10,
     String sortBy = 'createdAt',
     String sortDirection = 'desc',
+    Map<String, dynamic>? extraFilters,
   }) async {
     final queryParameters = <String, dynamic>{
       'page': page,
@@ -44,7 +48,13 @@ class ProductService {
       if (requiresPrescription != null)
         'requiresPrescription': requiresPrescription,
       if (isFeatured != null) 'isFeatured': isFeatured,
+      if (extraFilters != null) ...extraFilters,
     };
+    final cacheQueryParameters = queryParameters.map(
+      (key, value) => MapEntry(key, value.toString()),
+    );
+    final cacheKey =
+        'products:${Uri(queryParameters: cacheQueryParameters).query}';
 
     try {
       final response = await _dioClient.get<dynamic>(
@@ -53,16 +63,36 @@ class ProductService {
       );
       final apiResponse = _parseApiResponse<PageResponse<ProductModel>>(
         response.data,
-        (json) => PageResponse<ProductModel>.fromJson(
-          _asJsonObject(json),
-          (item) => ProductModel.fromJson(_asJsonObject(item)),
-        ),
+        _parseProductPage,
       );
 
-      return _requireData(apiResponse);
+      final page = _requireData(apiResponse);
+      final payload = _asJsonObject(response.data)['data'];
+      if (payload is Map) {
+        await _localCache.write(cacheKey, _asJsonObject(payload));
+        final content = payload['content'];
+        if (content is List) {
+          for (final item in content) {
+            final product = _asJsonObject(item);
+            final id = product['id']?.toString();
+            if (id != null && id.isNotEmpty) {
+              await _localCache.write('product:$id', product);
+            }
+          }
+        }
+      }
+      return page;
     } on DioException catch (error) {
+      if (_isConnectionError(error)) {
+        final cached = await _readCachedPage(cacheKey);
+        if (cached != null) return cached;
+      }
       throw _toApiException(error);
-    } on ApiException {
+    } on ApiException catch (error) {
+      if (_isConnectionApiException(error)) {
+        final cached = await _readCachedPage(cacheKey);
+        if (cached != null) return cached;
+      }
       rethrow;
     } catch (_) {
       throw const ApiException(_defaultErrorMessage);
@@ -85,14 +115,60 @@ class ProductService {
         (json) => ProductModel.fromJson(_asJsonObject(json)),
       );
 
-      return _requireData(apiResponse);
+      final product = _requireData(apiResponse);
+      final rawProduct = _asJsonObject(response.data)['data'];
+      if (rawProduct is Map) {
+        final productJson = _asJsonObject(rawProduct);
+        await _localCache.write('product:${product.id}', productJson);
+        final requestedKey = path.split('/').last;
+        if (requestedKey != product.id) {
+          await _localCache.write('product:$requestedKey', productJson);
+        }
+      }
+      return product;
     } on DioException catch (error) {
+      if (_isConnectionError(error)) {
+        final cached = await _localCache.read(
+          'product:${path.split('/').last}',
+        );
+        if (cached != null) return ProductModel.fromJson(cached);
+      }
       throw _toApiException(error);
-    } on ApiException {
+    } on ApiException catch (error) {
+      if (_isConnectionApiException(error)) {
+        final cached = await _localCache.read(
+          'product:${path.split('/').last}',
+        );
+        if (cached != null) return ProductModel.fromJson(cached);
+      }
       rethrow;
     } catch (_) {
       throw const ApiException(_defaultErrorMessage);
     }
+  }
+
+  Future<PageResponse<ProductModel>?> _readCachedPage(String key) async {
+    final cached = await _localCache.read(key);
+    if (cached == null) return null;
+    return _parseProductPage(cached);
+  }
+
+  bool _isConnectionError(DioException error) {
+    return error.type == DioExceptionType.connectionTimeout ||
+        error.type == DioExceptionType.receiveTimeout ||
+        error.type == DioExceptionType.sendTimeout ||
+        error.type == DioExceptionType.connectionError;
+  }
+
+  bool _isConnectionApiException(ApiException error) {
+    return error.statusCode == null && error.message == _connectionErrorMessage;
+  }
+
+  PageResponse<ProductModel> _parseProductPage(dynamic json) {
+    return PageResponse<ProductModel>.fromJson(
+      _asJsonObject(json),
+      (item) => ProductModel.fromJson(_asJsonObject(item)),
+    );
   }
 
   ApiResponse<T> _parseApiResponse<T>(
