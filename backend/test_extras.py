@@ -149,7 +149,12 @@ def main():
             s, ref = request(base + f"/orders/admin/{oid}/refund", "POST", {"reason": "Khách trả hàng"}, admin)
             assert s == 409  # COMPLETED + BANK_TRANSFER chưa PAID -> không hoàn tiền
             _, pay = request(base + "/payments", "POST", {"orderId": oid, "paymentMethod": "BANK_TRANSFER"}, cust)
-            request(base + f"/payments/{pay['data']['id']}/status", "PUT", {"paymentStatus": "PAID", "transactionCode": "T1"}, cust)
+            # khách KHÔNG được tự đánh dấu đã thanh toán; chỉ admin xác nhận khi đã nhận tiền
+            assert request(base + f"/payments/{pay['data']['id']}/status", "PUT", {"paymentStatus": "PAID"}, cust)[0] == 403
+            assert request(base + f"/orders/admin/{oid}/confirm-payment", "POST", {}, cust)[0] == 403
+            s, cf = request(base + f"/orders/admin/{oid}/confirm-payment", "POST", {"transactionCode": "T1"}, admin)
+            assert s == 200 and cf["data"]["paymentStatus"] == "PAID"
+            assert request(base + f"/orders/admin/{oid}/confirm-payment", "POST", {}, admin)[0] == 409
             s, ref = request(base + f"/orders/admin/{oid}/refund", "POST", {"reason": "Khách trả hàng"}, admin)
             assert s == 200 and ref["data"]["paymentStatus"] == "REFUNDED"
             assert request(base + f"/orders/admin/{oid}/refund", "POST", {}, admin)[0] == 409
@@ -267,6 +272,93 @@ def main():
         assert extras.favorites_tick(app.connect, fake_fcm) == 2                   # giá 65.000 < 80.000 và có hàng lại
         assert extras.favorites_tick(app.connect, fake_fcm) == 0
     print("PASS: scheduler — medication reminders (daily/weekly, dedupe) and favorite price/stock alerts")
+
+    # ---- MoMo: gọi trực tiếp handler với MoMo giả (không cần mạng)
+    momo = importlib.import_module("momo")
+    with tempfile.TemporaryDirectory(prefix="antam-momo-") as tmp:
+        app.DB_PATH = Path(tmp) / "m.sqlite3"
+        app.seed()
+        customer = {"id": "u-customer", "roles": ["CUSTOMER"], "fullName": "Khách"}
+        stranger = {"id": "u-staff", "roles": ["PHARMACIST"], "fullName": "NV"}
+        out = []
+        send = lambda body, code=200: out.append((code, body))
+        fcm = []
+        send_fcm = lambda tokens, title, content, data=None: fcm.append(title)
+        posted, state = [], {"query": {"resultCode": 1000, "message": "Dang cho"}, "down": False}
+
+        def fake_post(url, payload, timeout=20):
+            if state["down"]:
+                raise momo.MomoError("Không kết nối được tới MoMo, vui lòng thử lại")
+            posted.append((url, payload))
+            if url.endswith("/create"):
+                return {"resultCode": 0, "payUrl": "https://test-payment.momo.vn/pay/abc", "deeplink": "momo://app", "qrCodeUrl": "momo://qr"}
+            return state["query"]
+        momo.post_json = fake_post
+
+        def call(method, path, data=None, user=customer):
+            out.clear()
+            with app.connect() as db:
+                handled = extras.handle(send, db, send_fcm, method, path, {}, data or {}, user)
+            assert handled
+            return out[-1]
+
+        def make_order(oid, amount):
+            with app.connect() as db:
+                extras.save(db, "orders", oid, "u-customer", {
+                    "id": oid, "orderCode": "AT" + oid.upper(), "userId": "u-customer", "finalAmount": amount, "paymentMethod": "MOMO",
+                    "paymentStatus": "PENDING", "orderStatus": "PENDING", "statusHistories": []})
+
+        make_order("o1", 195000)
+        code, body = call("POST", "/payments/momo/create-payment", {"orderId": "o1"})
+        assert code == 201 and body["data"]["payUrl"].startswith("https://test-payment.momo.vn") and body["data"]["sandbox"] is True
+        url, sent = posted[-1]
+        assert url.endswith("/v2/gateway/api/create") and sent["amount"] == 195000 and sent["requestType"] == "captureWallet"
+        cfg = momo.config()
+        raw = (f"accessKey={cfg['accessKey']}&amount={sent['amount']}&extraData={sent['extraData']}&ipnUrl={sent['ipnUrl']}"
+               f"&orderId={sent['orderId']}&orderInfo={sent['orderInfo']}&partnerCode={sent['partnerCode']}"
+               f"&redirectUrl={sent['redirectUrl']}&requestId={sent['requestId']}&requestType={sent['requestType']}")
+        assert sent["signature"] == momo.sign(cfg["secretKey"], raw) and len(sent["signature"]) == 64
+        assert call("POST", "/payments/momo/create-payment", {"orderId": "o1"}, stranger)[0] == 404   # đơn của người khác
+
+        code, body = call("POST", "/payments/momo/verify", {"orderId": "o1"})            # MoMo: đang chờ
+        assert code == 200 and body["data"]["status"] == "PENDING" and body["data"]["resultCode"] == 1000
+        state["query"] = {"resultCode": 0, "amount": 195000, "transId": 777, "message": "OK"}
+        code, body = call("POST", "/payments/momo/verify", {"orderId": "o1"})            # thanh toán xong
+        assert code == 200 and body["data"]["status"] == "PAID" and body["data"]["payment"]["transactionCode"] == "777"
+        with app.connect() as db:
+            assert extras.get(db, "orders", "o1")[1]["paymentStatus"] == "PAID"
+            assert any(n["type"] == "PAYMENT" for _, _, n in extras.load(db, "notifications", "u-customer"))
+        assert call("POST", "/payments/momo/create-payment", {"orderId": "o1"})[0] == 409   # đã thanh toán
+
+        make_order("o2", 100000)                                                          # số tiền MoMo trả về không khớp
+        call("POST", "/payments/momo/create-payment", {"orderId": "o2"})
+        state["query"] = {"resultCode": 0, "amount": 1000, "transId": 1}
+        assert call("POST", "/payments/momo/verify", {"orderId": "o2"})[0] == 409
+        state["query"] = {"resultCode": 1006, "message": "Nguoi dung tu choi"}            # khách hủy trên MoMo
+        code, body = call("POST", "/payments/momo/verify", {"orderId": "o2"})
+        assert body["data"]["status"] == "FAILED"
+
+        make_order("o3", 50000)                                                           # IPN
+        call("POST", "/payments/momo/create-payment", {"orderId": "o3"})
+        with app.connect() as db:
+            momo_order = extras.payment_of_order(db, "o3")[2]["momoOrderId"]
+        ipn = {"partnerCode": cfg["partnerCode"], "orderId": momo_order, "requestId": "RQ1", "amount": 50000, "orderInfo": "x",
+               "orderType": "momo_wallet", "transId": 555, "resultCode": 0, "message": "OK", "payType": "qr",
+               "responseTime": 1, "extraData": ""}
+        bad = dict(ipn, signature="0" * 64)
+        assert call("POST", "/payments/momo/ipn", bad, None)[0] == 400
+        assert call("POST", "/payments/momo/ipn", dict(ipn, signature=momo.ipn_signature(cfg, ipn)), None)[0] == 200
+        with app.connect() as db:
+            assert extras.payment_of_order(db, "o3")[2]["paymentStatus"] == "PAID"
+
+        make_order("o4", 500)                                                             # dưới mức tối thiểu của MoMo
+        assert call("POST", "/payments/momo/create-payment", {"orderId": "o4"})[0] == 502
+        make_order("o5", 90000)
+        state["down"] = True                                                              # MoMo không truy cập được
+        code, body = call("POST", "/payments/momo/create-payment", {"orderId": "o5"})
+        assert code == 502 and "MoMo" in body["message"]
+        assert call("GET", "/payments/momo/return", None, None)[1].startswith("<!doctype html>")
+    print("PASS: MoMo — signing, create/verify/IPN, amount check, failure and unreachable-gateway handling")
 
 
 if __name__ == "__main__":

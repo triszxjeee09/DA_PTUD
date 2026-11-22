@@ -225,8 +225,9 @@ class Handler(BaseHTTPRequestHandler):
         db = getattr(self, "_db", None)
         if db is not None:
             db.commit()
-        raw = json.dumps(body, ensure_ascii=False, default=str).encode()
-        self.send_response(code); self.send_header("Content-Type", "application/json; charset=utf-8")
+        is_html = isinstance(body, str)
+        raw = body.encode() if is_html else json.dumps(body, ensure_ascii=False, default=str).encode()
+        self.send_response(code); self.send_header("Content-Type", "text/html; charset=utf-8" if is_html else "application/json; charset=utf-8")
         self.send_header("Content-Length", str(len(raw))); self.send_header("Access-Control-Allow-Origin", "*")
         self.send_header("Access-Control-Allow-Headers", "Authorization, Content-Type")
         self.send_header("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
@@ -716,6 +717,7 @@ class Handler(BaseHTTPRequestHandler):
                 if len(parts)==3 and parts[-1]=="status" and method=="PUT":
                     row=db.execute("SELECT ownerId,payload FROM records WHERE kind='payments' AND id=?",(parts[1],)).fetchone()
                     if not row or row["ownerId"]!=user["id"] and "ADMIN" not in user["roles"]: return self.send_json(api(None,"Không tìm thấy giao dịch",404),404)
+                    if data.get("paymentStatus") in ("PAID","SUCCESS","REFUNDED") and "ADMIN" not in user["roles"]: return self.send_json(api(None,"Chỉ quản trị viên hoặc cổng thanh toán mới được xác nhận thanh toán",403),403)
                     payment=json.loads(row["payload"]); payment["paymentStatus"]=data.get("paymentStatus",payment["paymentStatus"]); payment["paymentStatusLabel"]={"PAID":"Đã thanh toán","FAILED":"Thanh toán thất bại","REFUNDED":"Đã hoàn tiền"}.get(payment["paymentStatus"],"Chờ thanh toán"); payment["transactionCode"]=data.get("transactionCode"); payment["paidAt"]=NOW() if payment["paymentStatus"]=="PAID" else None; db.execute("UPDATE records SET payload=? WHERE kind='payments' AND id=?",(json.dumps(payment,ensure_ascii=False),payment["id"]))
                     order_row=db.execute("SELECT payload FROM records WHERE kind='orders' AND id=?",(payment["orderId"],)).fetchone()
                     if order_row:

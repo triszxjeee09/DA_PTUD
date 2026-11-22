@@ -63,6 +63,7 @@ class NotificationNavigationHandler {
   ) {
     switch (type) {
       case 'ORDER':
+      case 'PAYMENT':
         if (referenceId != null) {
           return _NotificationRoute(
             routeName: AppRoutes.orderDetail,

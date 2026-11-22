@@ -97,6 +97,40 @@ class _AdminOrderDetailScreenState extends State<AdminOrderDetailScreen> {
     );
   }
 
+  Future<void> _confirmPayment() async {
+    final controller = TextEditingController();
+    final code = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Xác nhận đã nhận tiền'),
+        content: TextField(
+          controller: controller,
+          decoration: const InputDecoration(
+            labelText: 'Mã giao dịch ngân hàng (không bắt buộc)',
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(dialogContext).pop(), child: const Text('Hủy')),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(controller.text.trim()),
+            child: const Text('Đã nhận tiền'),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    if (code == null) {
+      return;
+    }
+    await _run(
+      () => _api.post(
+        '/orders/admin/${widget.orderId}/confirm-payment',
+        body: {'transactionCode': code},
+      ),
+      'Đã xác nhận thanh toán',
+    );
+  }
+
   Future<void> _refund() async {
     final controller = TextEditingController();
     final reason = await showDialog<String>(
@@ -144,6 +178,10 @@ class _AdminOrderDetailScreenState extends State<AdminOrderDetailScreen> {
     final order = _order;
     final items = order == null ? <Map<String, dynamic>>[] : JsonApi.asList(order['items']);
     final history = order == null ? <Map<String, dynamic>>[] : JsonApi.asList(order['statusHistories']);
+    final canConfirmPayment = order != null &&
+        order['paymentStatus'] != 'PAID' &&
+        order['paymentStatus'] != 'REFUNDED' &&
+        order['orderStatus'] != 'CANCELLED';
     final canRefund = order != null &&
         order['paymentStatus'] != 'REFUNDED' &&
         (order['paymentStatus'] == 'PAID' || order['orderStatus'] == 'CANCELLED');
@@ -251,6 +289,12 @@ class _AdminOrderDetailScreenState extends State<AdminOrderDetailScreen> {
                       icon: const Icon(Icons.receipt_long_outlined),
                       label: const Text('Hóa đơn'),
                     ),
+                    if (canConfirmPayment)
+                      FilledButton.tonalIcon(
+                        onPressed: _busy ? null : _confirmPayment,
+                        icon: const Icon(Icons.price_check),
+                        label: const Text('Xác nhận đã nhận tiền'),
+                      ),
                     if (canRefund)
                       OutlinedButton.icon(
                         onPressed: _busy ? null : _refund,

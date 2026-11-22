@@ -8,6 +8,7 @@ import '../../../../core/network/json_api.dart';
 import '../../../../core/utils/currency_formatter.dart';
 import '../../../../core/utils/date_formatter.dart';
 import '../../../cart/providers/cart_provider.dart';
+import '../../../payment/presentation/screens/momo_webview_screen.dart';
 import '../../../payment/providers/payment_provider.dart';
 import '../../data/models/order_detail_model.dart';
 import '../../data/models/order_item_model.dart';
@@ -735,6 +736,18 @@ class _OrderActions extends StatelessWidget {
   final VoidCallback onTrack;
   final VoidCallback onCancel;
 
+  Future<void> _payWithMomo(BuildContext context) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final error = await MomoPayment.start(
+      context,
+      orderId: order.id,
+      orderCode: order.orderCode,
+    );
+    if (error != null) {
+      messenger.showSnackBar(SnackBar(content: Text(error)));
+    }
+  }
+
   Future<void> _reorder(BuildContext context) async {
     final messenger = ScaffoldMessenger.of(context);
     final navigator = Navigator.of(context);
@@ -773,6 +786,16 @@ class _OrderActions extends StatelessWidget {
           icon: const Icon(Icons.local_shipping_outlined),
           label: const Text('Theo dõi đơn hàng'),
         ),
+        if (order.paymentMethod.toUpperCase() == 'MOMO' &&
+            order.paymentStatus.toUpperCase() != 'PAID' &&
+            order.orderStatus.toUpperCase() != 'CANCELLED') ...[
+          const SizedBox(height: 10),
+          FilledButton.icon(
+            onPressed: () => _payWithMomo(context),
+            icon: const Icon(Icons.account_balance_wallet_outlined),
+            label: const Text('Thanh toán bằng MoMo'),
+          ),
+        ],
         const SizedBox(height: 10),
         Row(
           children: [

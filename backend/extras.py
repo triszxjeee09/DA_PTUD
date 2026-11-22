@@ -17,6 +17,8 @@ import time
 import unicodedata
 from datetime import datetime, timedelta, timezone
 
+import momo
+
 STAFF_ROLES = {"ADMIN", "PHARMACIST"}
 # App Flutter dùng DELIVERED, dữ liệu cũ dùng COMPLETED: cả hai đều là đơn đã hoàn tất.
 DONE_STATUSES = ("COMPLETED", "DELIVERED")
@@ -564,6 +566,48 @@ def start_scheduler(connect, send_fcm_getter, interval=20):
     threading.Thread(target=loop, daemon=True, name="pharma-scheduler").start()
 
 
+
+PAYMENT_LABELS = {"PENDING": "Chờ thanh toán", "PAID": "Đã thanh toán", "FAILED": "Thanh toán thất bại",
+                  "REFUNDED": "Đã hoàn tiền"}
+MOMO_RETURN_HTML = (
+    '<!doctype html><html lang="vi"><head><meta charset="utf-8"><meta name="viewport" '
+    'content="width=device-width,initial-scale=1"><title>An Tâm Pharma</title></head>'
+    '<body style="font-family:sans-serif;text-align:center;padding:48px 16px">'
+    '<h2>Đã nhận kết quả thanh toán</h2><p>Bạn có thể quay lại ứng dụng An Tâm Pharma.</p></body></html>')
+
+
+def payment_of_order(db, order_id):
+    """Giao dịch thanh toán mới nhất của một đơn: (id, ownerId, payload) hoặc None."""
+    rows = [r for r in load(db, "payments") if r[2].get("orderId") == order_id]
+    return rows[-1] if rows else None
+
+
+def set_payment_status(db, send_fcm, pid, owner, payment, status, transaction_code=None):
+    """Cập nhật trạng thái giao dịch + đơn hàng tương ứng và thông báo cho khách."""
+    payment["paymentStatus"] = status
+    payment["paymentStatusLabel"] = PAYMENT_LABELS.get(status, "Chờ thanh toán")
+    if transaction_code:
+        payment["transactionCode"] = transaction_code
+    payment["paidAt"] = NOW() if status == "PAID" else None
+    save(db, "payments", pid, owner, payment)
+    order_owner, order = get(db, "orders", payment["orderId"])
+    if order:
+        order["paymentStatus"], order["updatedAt"] = status, NOW()
+        if status == "PAID":
+            order.setdefault("statusHistories", []).append({
+                "id": "osh-" + secrets.token_hex(4), "status": order.get("orderStatus"),
+                "statusLabel": "Đã xác nhận thanh toán", "note": f"Giao dịch {payment.get('transactionCode') or ''}".strip(),
+                "changedByName": payment.get("paymentMethod"), "createdAt": NOW()})
+        save(db, "orders", order["id"], order_owner, order)
+    if status == "PAID":
+        notify(db, send_fcm, owner, "Thanh toán thành công", f"Đơn {payment.get('orderCode')} đã được thanh toán.",
+               "PAYMENT", payment["orderId"])
+    elif status == "FAILED":
+        notify(db, send_fcm, owner, "Thanh toán chưa thành công", f"Đơn {payment.get('orderCode')} chưa thanh toán được.",
+               "PAYMENT", payment["orderId"])
+    return payment
+
+
 # ----------------------------------------------------------------------------- router
 def handle(send, db, send_fcm, method, path, q, data, user):
     """Xử lý route mở rộng. Trả True nếu đã gửi phản hồi."""
@@ -736,6 +780,26 @@ def handle(send, db, send_fcm, method, path, q, data, user):
             if not order:
                 return fail("Không tìm thấy đơn hàng", 404)
             return out(api(order))
+        if len(segs) == 4 and segs[1] == "admin" and segs[3] == "confirm-payment" and method == "POST":
+            if "ADMIN" not in roles:
+                return need_staff()
+            owner, order = get(db, "orders", segs[2])
+            if not order:
+                return fail("Không tìm thấy đơn hàng", 404)
+            if order.get("orderStatus") == "CANCELLED":
+                return fail("Đơn hàng đã bị hủy", 409)
+            if order.get("paymentStatus") in ("PAID", "REFUNDED"):
+                return fail("Đơn hàng đã được xác nhận thanh toán", 409)
+            existing = payment_of_order(db, order["id"])
+            if existing:
+                pid, pay_owner, payment = existing
+            else:
+                pid, pay_owner = "pay-" + secrets.token_hex(5), owner
+                payment = {"id": pid, "orderId": order["id"], "orderCode": order["orderCode"], "amount": order["finalAmount"],
+                           "paymentMethod": order.get("paymentMethod"), "transactionCode": None, "createdAt": NOW()}
+            code = str(data.get("transactionCode") or "").strip() or f"ADMIN-{order['orderCode']}"
+            set_payment_status(db, send_fcm, pid, pay_owner, payment, "PAID", code)
+            return out(api(get(db, "orders", segs[2])[1]))
         if len(segs) == 4 and segs[1] == "admin" and segs[3] == "refund" and method == "POST":
             if "ADMIN" not in roles:
                 return need_staff()
@@ -758,6 +822,76 @@ def handle(send, db, send_fcm, method, path, q, data, user):
                     save(db, "payments", pay_id, pay_owner, pay)
             notify(db, send_fcm, owner, "Đơn hàng đã được hoàn tiền", f"Đơn {order['orderCode']} đã hoàn tiền.", "ORDER", order["id"])
             return out(api(order))
+
+    # ---- ví MoMo (sandbox mặc định)
+    if head == "payments" and segs[1:2] == ["momo"]:
+        action = segs[2] if len(segs) > 2 else ""
+        if action == "return" and method == "GET":
+            return out(MOMO_RETURN_HTML)
+        if action == "ipn" and method == "POST":
+            if not momo.verify_ipn(data):
+                return fail("Chữ ký không hợp lệ", 400)
+            found = [r for r in load(db, "payments") if r[2].get("momoOrderId") == data.get("orderId")]
+            if not found:
+                return fail("Không tìm thấy giao dịch", 404)
+            pid, owner, payment = found[-1]
+            if payment["paymentStatus"] != "PAID":
+                if int(data.get("resultCode", -1)) == 0 and int(data.get("amount", 0)) == int(float(payment["amount"])):
+                    set_payment_status(db, send_fcm, pid, owner, payment, "PAID", str(data.get("transId", "")))
+                elif int(data.get("resultCode", -1)) not in momo.PENDING_CODES:
+                    set_payment_status(db, send_fcm, pid, owner, payment, "FAILED")
+            return out(api({"resultCode": 0}))
+        if not user:
+            return need_login()
+        if action == "create-payment" and method == "POST":
+            owner, order = get(db, "orders", data.get("orderId", ""))
+            if not order or owner != user["id"]:
+                return fail("Không tìm thấy đơn hàng", 404)
+            if order.get("orderStatus") == "CANCELLED":
+                return fail("Đơn hàng đã bị hủy", 409)
+            if order.get("paymentStatus") == "PAID":
+                return fail("Đơn hàng đã được thanh toán", 409)
+            existing = payment_of_order(db, order["id"])
+            if existing:
+                pid, _, payment = existing
+            else:
+                pid = "pay-" + secrets.token_hex(5)
+                payment = {"id": pid, "orderId": order["id"], "orderCode": order["orderCode"], "amount": order["finalAmount"],
+                           "transactionCode": None, "createdAt": NOW()}
+            try:
+                created = momo.create_payment(order["orderCode"], int(float(order["finalAmount"])), f"Thanh toan don {order['orderCode']}")
+            except momo.MomoError as error:
+                return fail(str(error), 502)
+            payment.update(created)
+            payment["paymentMethod"] = "MOMO"
+            order["paymentMethod"] = "MOMO"
+            save(db, "orders", order["id"], owner, order)
+            set_payment_status(db, send_fcm, pid, owner, payment, "PENDING")
+            return out(api({"paymentId": pid, **created, "amount": payment["amount"], "orderCode": order["orderCode"],
+                            "sandbox": momo.config()["isSandbox"]}), 201)
+        if action == "verify" and method == "POST":
+            owner, order = get(db, "orders", data.get("orderId", ""))
+            if not order or (owner != user["id"] and "ADMIN" not in roles):
+                return fail("Không tìm thấy đơn hàng", 404)
+            existing = payment_of_order(db, order["id"])
+            if not existing or not existing[2].get("momoOrderId"):
+                return fail("Đơn hàng chưa có giao dịch MoMo", 404)
+            pid, pay_owner, payment = existing
+            if payment["paymentStatus"] == "PAID":
+                return out(api({"payment": payment, "resultCode": 0, "message": "Đã thanh toán", "status": "PAID"}))
+            try:
+                result = momo.query_payment(payment["momoOrderId"])
+            except momo.MomoError as error:
+                return fail(str(error), 502)
+            code = int(result.get("resultCode", -1))
+            if code == 0:
+                if int(result.get("amount", 0)) != int(float(payment["amount"])):
+                    return fail("Số tiền thanh toán không khớp với đơn hàng", 409)
+                set_payment_status(db, send_fcm, pid, pay_owner, payment, "PAID", str(result.get("transId", "")))
+            elif code not in momo.PENDING_CODES:
+                set_payment_status(db, send_fcm, pid, pay_owner, payment, "FAILED")
+            return out(api({"payment": payment, "resultCode": code, "message": result.get("message"),
+                            "status": payment["paymentStatus"]}))
 
     # ---- thanh toán chuyển khoản QR (VietQR)
     if head == "payments" and segs[1:] == ["bank-qr"] and method == "GET":

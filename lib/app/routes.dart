@@ -16,6 +16,7 @@ import '../features/loyalty/presentation/screens/loyalty_screen.dart';
 import '../features/order/presentation/screens/frequent_products_screen.dart';
 import '../features/order/presentation/screens/invoice_screen.dart';
 import '../features/payment/presentation/screens/bank_transfer_screen.dart';
+import '../features/payment/presentation/screens/momo_webview_screen.dart';
 import '../features/payment/presentation/screens/payment_history_screen.dart';
 import '../features/pharmacist/presentation/screens/pharmacist_main_screen.dart';
 import '../features/review/presentation/screens/my_reviews_screen.dart';
@@ -139,6 +140,7 @@ class AppRoutes {
   static const String paymentProcessing = '/payment/processing';
   static const String paymentResult = '/payment/result';
   static const String paymentVnPay = '/payment/vnpay';
+  static const String paymentMomo = '/payment/momo';
   static const String pharmacies = '/pharmacies';
   static const String pharmacyDetail = '/pharmacies/detail';
   static const String prescriptions = '/prescriptions';
@@ -544,6 +546,20 @@ class AppRoutes {
             paymentUrl: arguments?['paymentUrl']?.toString() ?? '',
             orderId: arguments?['orderId']?.toString() ?? '',
             orderCode: arguments?['orderCode']?.toString() ?? '',
+          ),
+          settings: settings,
+        );
+      case paymentMomo:
+        final momoArgs = _readArguments(settings.arguments);
+        return MaterialPageRoute(
+          builder: (_) => RequireAuth(
+            child: MomoWebViewScreen(
+              payUrl: momoArgs?['payUrl']?.toString() ?? '',
+              deeplink: momoArgs?['deeplink']?.toString(),
+              orderId: momoArgs?['orderId']?.toString() ?? '',
+              orderCode: momoArgs?['orderCode']?.toString() ?? '',
+              sandbox: momoArgs?['sandbox'] == true,
+            ),
           ),
           settings: settings,
         );

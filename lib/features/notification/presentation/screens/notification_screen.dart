@@ -104,6 +104,7 @@ class _NotificationScreenState extends State<NotificationScreen> {
     final referenceId = notification.referenceId;
     switch (notification.type) {
       case 'ORDER':
+      case 'PAYMENT':
         if (referenceId != null && referenceId.isNotEmpty) {
           Navigator.of(context).pushNamed(
             AppRoutes.orderDetail,

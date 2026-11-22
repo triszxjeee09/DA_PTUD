@@ -11,6 +11,7 @@ import '../../../account/providers/user_address_provider.dart';
 import '../../../auth/providers/auth_provider.dart';
 import '../../../cart/data/models/cart_item_model.dart';
 import '../../../cart/providers/cart_provider.dart';
+import '../../../payment/presentation/screens/momo_webview_screen.dart';
 import '../../../payment/providers/payment_provider.dart';
 import '../../../prescription/data/models/prescription_model.dart';
 import '../../../voucher/data/models/apply_voucher_response_model.dart';
@@ -267,6 +268,27 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
           'orderCode': order.orderCode,
         },
       );
+      return;
+    }
+
+    if (_selectedPayment.value == 'MOMO') {
+      final cart = context.read<CartProvider>();
+      final error = await MomoPayment.start(
+        context,
+        orderId: order.id,
+        orderCode: order.orderCode,
+        replace: true,
+      );
+      await cart.loadCart();
+      if (error != null && mounted) {
+        _showSnackBar(
+          '$error. Đơn ${order.orderCode} đã được tạo, bạn có thể thanh toán lại trong chi tiết đơn.',
+        );
+        Navigator.of(context).pushReplacementNamed(
+          AppRoutes.orderDetail,
+          arguments: {'orderId': order.id},
+        );
+      }
       return;
     }
 
@@ -1262,7 +1284,7 @@ enum _PaymentOption {
   final String label;
   final String value;
 
-  bool get isAvailable => this != _PaymentOption.momo;
+  bool get isAvailable => true;
 
   String get displayLabel {
     return switch (this) {
