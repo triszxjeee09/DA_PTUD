@@ -37,7 +37,7 @@ class NotificationService {
         _readUnreadCount,
       );
 
-      return _requireData(apiResponse);
+      return await _requireData(apiResponse);
     } on DioException catch (error) {
       throw _toApiException(error);
     } on ApiException {
@@ -57,7 +57,7 @@ class NotificationService {
         (json) => NotificationModel.fromJson(_asJsonObject(json)),
       );
 
-      return _requireData(apiResponse);
+      return await _requireData(apiResponse);
     } on DioException catch (error) {
       throw _toApiException(error);
     } on ApiException {
@@ -105,7 +105,7 @@ class NotificationService {
         ),
       );
 
-      return _requireData(apiResponse);
+      return await _requireData(apiResponse);
     } on DioException catch (error) {
       throw _toApiException(error);
     } on ApiException {

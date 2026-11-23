@@ -26,7 +26,7 @@ class VoucherService {
         _readVouchers,
       );
 
-      return _requireData(apiResponse);
+      return await _requireData(apiResponse);
     } on DioException catch (error) {
       throw _toApiException(error);
     } on ApiException {
@@ -49,7 +49,7 @@ class VoucherService {
         (json) => ApplyVoucherResponseModel.fromJson(_asJsonObject(json)),
       );
 
-      return _requireData(apiResponse);
+      return await _requireData(apiResponse);
     } on DioException catch (error) {
       throw _toApiException(error);
     } on ApiException {

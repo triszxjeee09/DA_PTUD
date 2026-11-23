@@ -45,7 +45,7 @@ class AdminBrandService {
         (json) => BrandModel.fromJson(_asJsonObject(json)),
       );
 
-      return _requireData(apiResponse);
+      return await _requireData(apiResponse);
     } on DioException catch (error) {
       throw _toApiException(error);
     } on ApiException {
@@ -66,7 +66,7 @@ class AdminBrandService {
         (json) => BrandModel.fromJson(_asJsonObject(json)),
       );
 
-      return _requireData(apiResponse);
+      return await _requireData(apiResponse);
     } on DioException catch (error) {
       throw _toApiException(error);
     } on ApiException {
@@ -90,7 +90,7 @@ class AdminBrandService {
         (json) => BrandModel.fromJson(_asJsonObject(json)),
       );
 
-      return _requireData(apiResponse);
+      return await _requireData(apiResponse);
     } on DioException catch (error) {
       throw _toApiException(error);
     } on ApiException {

@@ -1,6 +1,6 @@
-import 'package:doan/app/theme.dart';
-import 'package:doan/features/auth/presentation/screens/login_screen.dart';
-import 'package:doan/features/auth/providers/auth_provider.dart';
+import 'package:an_tam_pharma/app/theme.dart';
+import 'package:an_tam_pharma/features/auth/presentation/screens/login_screen.dart';
+import 'package:an_tam_pharma/features/auth/providers/auth_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';

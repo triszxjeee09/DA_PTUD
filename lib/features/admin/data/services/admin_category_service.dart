@@ -46,7 +46,7 @@ class AdminCategoryService {
         (json) => _readCategoryPage(json, page: page, size: size),
       );
 
-      return _requireData(apiResponse);
+      return await _requireData(apiResponse);
     } on DioException catch (error) {
       throw _toApiException(error);
     } on ApiException {
@@ -66,7 +66,7 @@ class AdminCategoryService {
         (json) => AdminCategoryModel.fromJson(_asJsonObject(json)),
       );
 
-      return _requireData(apiResponse);
+      return await _requireData(apiResponse);
     } on DioException catch (error) {
       throw _toApiException(error);
     } on ApiException {
@@ -89,7 +89,7 @@ class AdminCategoryService {
         (json) => AdminCategoryModel.fromJson(_asJsonObject(json)),
       );
 
-      return _requireData(apiResponse);
+      return await _requireData(apiResponse);
     } on DioException catch (error) {
       throw _toApiException(error);
     } on ApiException {
@@ -113,7 +113,7 @@ class AdminCategoryService {
         (json) => AdminCategoryModel.fromJson(_asJsonObject(json)),
       );
 
-      return _requireData(apiResponse);
+      return await _requireData(apiResponse);
     } on DioException catch (error) {
       throw _toApiException(error);
     } on ApiException {

@@ -37,7 +37,11 @@ class DioClient {
       InterceptorsWrapper(
         onRequest: (options, handler) async {
           final skipAuth = options.extra['skipAuth'] == true;
-          if (!skipAuth) {
+          if (skipAuth) {
+            options.headers.removeWhere(
+              (name, _) => name.toLowerCase() == 'authorization',
+            );
+          } else {
             final token = await _tokenStorage.getToken();
             if (token != null && token.isNotEmpty) {
               options.headers['Authorization'] = 'Bearer $token';
@@ -61,7 +65,8 @@ class DioClient {
         },
         onError: (error, handler) async {
           final statusCode = error.response?.statusCode;
-          if (statusCode == 401) {
+          if (statusCode == 401 &&
+              error.requestOptions.extra['skipAuth'] != true) {
             await _handleUnauthorized();
           } else if (statusCode == 403) {
             AppNavigator.showForbiddenMessage(

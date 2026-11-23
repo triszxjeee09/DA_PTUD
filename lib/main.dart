@@ -9,16 +9,17 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   try {
-    // Cần chạy flutterfire configure để tạo firebase_options.dart
+    // The Android Google Services plugin supplies options from
+    // android/app/google-services.json. Keep Firebase optional so builds
+    // without that file still start normally.
     await Firebase.initializeApp();
     await FirebaseMessagingConfig.initialize();
     await FirebaseMessagingConfig.listenNotificationNavigation(
+
       AppNavigator.navigatorKey,
     );
   } catch (error) {
-    debugPrint(
-      'Firebase initialize failed. Please check Firebase configuration: $error',
-    );
+    debugPrint('Firebase initialize failed; continuing without push: $error');
   }
 
   runApp(const PharmaApp());

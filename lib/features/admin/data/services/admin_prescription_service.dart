@@ -41,7 +41,7 @@ class AdminPrescriptionService {
         ),
       );
 
-      return _requireData(apiResponse);
+      return await _requireData(apiResponse);
     } on DioException catch (error) {
       throw _toApiException(error);
     } on ApiException {

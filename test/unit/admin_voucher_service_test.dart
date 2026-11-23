@@ -1,8 +1,8 @@
 import 'package:dio/dio.dart';
-import 'package:doan/core/errors/api_exception.dart';
-import 'package:doan/core/network/dio_client.dart';
-import 'package:doan/features/admin/data/models/admin_voucher_request_model.dart';
-import 'package:doan/features/admin/data/services/admin_voucher_service.dart';
+import 'package:an_tam_pharma/core/errors/api_exception.dart';
+import 'package:an_tam_pharma/core/network/dio_client.dart';
+import 'package:an_tam_pharma/features/admin/data/models/admin_voucher_request_model.dart';
+import 'package:an_tam_pharma/features/admin/data/services/admin_voucher_service.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {

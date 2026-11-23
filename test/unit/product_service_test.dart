@@ -1,7 +1,8 @@
 import 'package:dio/dio.dart';
-import 'package:doan/core/errors/api_exception.dart';
-import 'package:doan/core/network/dio_client.dart';
-import 'package:doan/features/product/data/services/product_service.dart';
+import 'package:an_tam_pharma/core/errors/api_exception.dart';
+import 'package:an_tam_pharma/core/database/local_json_cache.dart';
+import 'package:an_tam_pharma/core/network/dio_client.dart';
+import 'package:an_tam_pharma/features/product/data/services/product_service.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -105,12 +106,143 @@ void main() {
       expect(result.content, hasLength(1));
     });
   });
+
+  group('ProductService SQLite cache', () {
+    test(
+      'uses the previously cached catalog when the API is offline',
+      () async {
+        final cache = _MemoryJsonCache();
+        final online = ProductService(
+          dioClient: _FakeDioClient(
+            responseData: _apiResponse(
+              data: {
+                'content': [_productJson()],
+                'page': 0,
+                'size': 10,
+                'totalElements': 1,
+                'totalPages': 1,
+                'last': true,
+              },
+            ),
+          ),
+          localCache: cache,
+        );
+        await online.getProducts();
+
+        final offline = ProductService(
+          dioClient: _FakeDioClient(
+            exception: DioException(
+              requestOptions: RequestOptions(path: '/products'),
+              type: DioExceptionType.connectionError,
+            ),
+          ),
+          localCache: cache,
+        );
+        final result = await offline.getProducts();
+
+        expect(result.content.single.id, 'product-001');
+        expect(result.content.single.name, 'Panadol Extra');
+      },
+    );
+
+    test('uses cached product detail when the API is offline', () async {
+      final cache = _MemoryJsonCache();
+      await ProductService(
+        dioClient: _FakeDioClient(
+          responseData: _apiResponse(data: _productJson()),
+        ),
+        localCache: cache,
+      ).getProductById('product-001');
+
+      final result = await ProductService(
+        dioClient: _FakeDioClient(
+          exception: DioException(
+            requestOptions: RequestOptions(path: '/products/product-001'),
+            type: DioExceptionType.connectionError,
+          ),
+        ),
+        localCache: cache,
+      ).getProductById('product-001');
+
+      expect(result.id, 'product-001');
+      expect(result.price, 35000);
+    });
+
+    test('uses cached catalog for DioClient connection exceptions', () async {
+      final cache = _MemoryJsonCache();
+      await ProductService(
+        dioClient: _FakeDioClient(
+          responseData: _apiResponse(
+            data: {
+              'content': [_productJson()],
+              'page': 0,
+              'size': 10,
+              'totalElements': 1,
+              'totalPages': 1,
+              'last': true,
+            },
+          ),
+        ),
+        localCache: cache,
+      ).getProducts();
+
+      final result = await ProductService(
+        dioClient: _FakeDioClient(
+          apiException: const ApiException('Không thể kết nối đến máy chủ'),
+        ),
+        localCache: cache,
+      ).getProducts();
+
+      expect(result.content.single.id, 'product-001');
+    });
+
+    test('does not hide authorization errors with cached catalog', () async {
+      final cache = _MemoryJsonCache();
+      await ProductService(
+        dioClient: _FakeDioClient(
+          responseData: _apiResponse(
+            data: {
+              'content': [_productJson()],
+              'page': 0,
+              'size': 10,
+              'totalElements': 1,
+              'totalPages': 1,
+              'last': true,
+            },
+          ),
+        ),
+        localCache: cache,
+      ).getProducts();
+
+      await expectLater(
+        ProductService(
+          dioClient: _FakeDioClient(
+            apiException: const ApiException(
+              'Vui lòng đăng nhập',
+              statusCode: 401,
+            ),
+          ),
+          localCache: cache,
+        ).getProducts(),
+        throwsA(
+          isA<ApiException>().having(
+            (error) => error.statusCode,
+            'statusCode',
+            401,
+          ),
+        ),
+      );
+    });
+  });
 }
 
 class _FakeDioClient extends DioClient {
-  _FakeDioClient({required this.responseData}) : super(dio: Dio());
+  _FakeDioClient({this.responseData, this.exception, this.apiException})
+    : super(dio: Dio());
 
   final Object? responseData;
+  final DioException? exception;
+  final ApiException? apiException;
   String? requestedPath;
   Map<String, dynamic>? requestedQueryParameters;
 
@@ -122,12 +254,26 @@ class _FakeDioClient extends DioClient {
   }) async {
     requestedPath = path;
     requestedQueryParameters = queryParameters;
+    if (exception != null) throw exception!;
+    if (apiException != null) throw apiException!;
 
     return Response<T>(
       data: responseData as T?,
       statusCode: 200,
       requestOptions: RequestOptions(path: path),
     );
+  }
+}
+
+class _MemoryJsonCache implements JsonCache {
+  final Map<String, Map<String, dynamic>> _values = {};
+
+  @override
+  Future<Map<String, dynamic>?> read(String key) async => _values[key];
+
+  @override
+  Future<void> write(String key, Map<String, dynamic> value) async {
+    _values[key] = value;
   }
 }
 
