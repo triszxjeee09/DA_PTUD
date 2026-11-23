@@ -10,7 +10,7 @@ from pathlib import Path
 
 from urllib.parse import quote
 
-from test_api import request
+from test_api import multipart_request, request
 
 ROOT = Path(__file__).resolve().parent
 
@@ -100,6 +100,24 @@ def main():
             _, ms = request(base + f"/health/members/{mom['data']['id']}/metrics?type=BLOOD_PRESSURE", token=cust)
             assert len(ms["data"]) == 1
             assert request(base + f"/health/members/{members['data'][0]['id']}", "DELETE", token=cust)[0] == 409
+
+            # ---- giỏ hàng: mọi thao tác trả về giỏ đầy đủ; + / - ; gộp cùng sản phẩm; xóa giỏ
+            s, c1 = request(base + "/cart/items", "POST", {"productId": "p-paracetamol", "quantity": 2}, staff)
+            assert s == 201 and c1["data"]["totalItems"] == 2 and len(c1["data"]["items"]) == 1
+            s, c2 = request(base + "/cart/items", "POST", {"productId": "p-paracetamol", "quantity": 1}, staff)
+            assert len(c2["data"]["items"]) == 1 and c2["data"]["totalItems"] == 3          # cộng dồn, không tạo dòng thứ hai
+            request(base + "/cart/items", "POST", {"productId": "p-saline", "quantity": 1}, staff)
+            item = c2["data"]["items"][0]["id"]
+            s, c3 = request(base + f"/cart/items/{item}/increase", "PUT", token=staff)
+            assert s == 200 and c3["data"]["totalItems"] == 5 and c3["data"]["items"][0]["quantity"] == 4
+            s, c4 = request(base + f"/cart/items/{item}/decrease", "PUT", token=staff)
+            assert c4["data"]["items"][0]["quantity"] == 3
+            s, c5 = request(base + f"/cart/items/{item}", "PUT", {"quantity": 10}, staff)
+            assert c5["data"]["items"][0]["quantity"] == 10 and c5["data"]["items"][0]["totalPrice"] == c5["data"]["items"][0]["unitPrice"] * 10
+            assert request(base + f"/cart/items/{item}/increase", "PUT", token=admin)[0] == 404   # không sửa giỏ của người khác
+            assert request(base + "/cart/items", "POST", {"productId": "khong-ton-tai"}, staff)[0] == 404
+            s, c6 = request(base + "/cart", "DELETE", token=staff)
+            assert s == 200 and c6["data"]["items"] == [] and request(base + "/cart", token=staff)[1]["data"]["totalItems"] == 0
 
             # ---- đơn hàng → hoàn tất → điểm thưởng → đổi voucher → áp dụng
             _, addr = request(base + "/users/addresses", "POST", {"receiverName": "Khách", "receiverPhone": "0900000003", "province": "TP.HCM",
@@ -229,6 +247,15 @@ def main():
             _, mine = request(base + f"/support/tickets/{tk['data']['id']}", token=cust)
             assert mine["data"]["statusLabel"] == "Đã giải quyết"
             assert request(base + f"/support/tickets/{tk['data']['id']}", token=admin)[0] == 200
+
+            # ---- upload từ Flutter Web: tên file có thể không có đuôi
+            png = b"\x89PNG\r\n\x1a\n" + b"0" * 32
+            s, up = multipart_request(base + "/prescriptions/upload", {"patientName": "Khách"}, [("files", "blob", "image/png", png)], cust)
+            assert s == 201 and up["data"]["images"][0]["imageUrl"].endswith(".png")
+            s, up = multipart_request(base + "/files/upload", {}, [("file", "photo", "image/jpeg", b"\xff\xd8\xff\xe0" + b"0" * 16)], cust)
+            assert s == 201 and up["data"]["fileUrl"].endswith(".jpg")
+            s, _ = multipart_request(base + "/files/upload", {}, [("file", "malware", "application/octet-stream", b"MZ" + b"0" * 16)], cust)
+            assert s == 400
 
             # ---- đơn thuốc: dược sĩ gợi ý sản phẩm + thông báo cho khách
             _, rx = request(base + "/prescriptions", "POST", {"patientName": "Khách", "imageUrls": ["http://x/rx.jpg"]}, cust)

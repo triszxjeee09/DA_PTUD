@@ -1,6 +1,5 @@
-import 'dart:io';
-
 import 'package:flutter/foundation.dart';
+import 'package:image_picker/image_picker.dart';
 
 import '../../../core/errors/api_exception.dart';
 import '../data/models/prescription_model.dart';
@@ -40,7 +39,7 @@ class PrescriptionProvider extends ChangeNotifier {
     required String patientName,
     String? patientPhone,
     String? note,
-    required List<File> files,
+    required List<XFile> files,
   }) async {
     _setUploading(true);
 

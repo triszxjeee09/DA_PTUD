@@ -32,6 +32,20 @@ BANK_INFO = {
 }
 
 
+def sniff_extension(content_type, data: bytes):
+    """Đoán đuôi file hợp lệ từ nội dung (chữ ký đầu file) hoặc content-type; None nếu không nhận ra."""
+    head = bytes(data[:12])
+    if head[:3] == b"\xff\xd8\xff":
+        return ".jpg"
+    if head[:4] == b"\x89PNG":
+        return ".png"
+    if head[:4] == b"RIFF" and head[8:12] == b"WEBP":
+        return ".webp"
+    if head[:4] == b"%PDF":
+        return ".pdf"
+    return None
+
+
 def NOW() -> str:
     return datetime.now(timezone.utc).isoformat()
 
@@ -100,6 +114,15 @@ def notify(db, send_fcm, user_id, title, content, ntype="GENERAL", reference_id=
             send_fcm(tokens, title, content, {"type": ntype, "referenceId": reference_id})
         except Exception as error:  # push lỗi không được làm hỏng API chính
             print(f"FCM notify failed: {error}", flush=True)
+
+
+def cart_payload(db, uid):
+    """Giỏ hàng đầy đủ của người dùng (cùng định dạng với GET /cart)."""
+    entries = [p for _, _, p in load(db, "cart", uid)]
+    return {"id": "cart-" + uid, "status": "ACTIVE", "items": entries,
+            "totalItems": sum(int(x.get("quantity", 1) or 1) for x in entries),
+            "totalAmount": sum(float(x.get("unitPrice", x.get("price", 0)) or 0) * int(x.get("quantity", 1) or 1) for x in entries),
+            "hasPrescriptionProduct": any(x.get("requiresPrescription", False) for x in entries)}
 
 
 def product_stock(db, product_id) -> int:
@@ -822,6 +845,57 @@ def handle(send, db, send_fcm, method, path, q, data, user):
                     save(db, "payments", pay_id, pay_owner, pay)
             notify(db, send_fcm, owner, "Đơn hàng đã được hoàn tiền", f"Đơn {order['orderCode']} đã hoàn tiền.", "ORDER", order["id"])
             return out(api(order))
+
+    # ---- giỏ hàng: mọi thao tác ghi trả về GIỎ HÀNG ĐẦY ĐỦ (app đọc phản hồi như CartModel)
+    if head == "cart":
+        if not user:
+            return need_login()
+        uid = user["id"]
+        if method == "DELETE" and len(segs) == 1:
+            db.execute("DELETE FROM records WHERE kind='cart' AND ownerId=?", (uid,))
+            return out(api(cart_payload(db, uid)))
+        if len(segs) >= 2 and segs[1] == "items":
+            if method == "POST" and len(segs) == 2:
+                row = db.execute("SELECT * FROM products WHERE id=?", (str(data.get("productId", "")),)).fetchone()
+                if not row or not row["isActive"]:
+                    return fail("Không tìm thấy sản phẩm", 404)
+                try:
+                    quantity = max(1, int(data.get("quantity", 1) or 1))
+                except (TypeError, ValueError):
+                    return fail("Số lượng không hợp lệ")
+                product = product_dict(db, row)
+                same = next(((cid, p) for cid, _, p in load(db, "cart", uid) if p.get("productId") == product["id"]), None)
+                if same:  # cùng sản phẩm: cộng dồn số lượng thay vì tạo dòng mới
+                    cid, payload = same
+                    payload["quantity"] += quantity
+                else:
+                    cid = "ci-" + secrets.token_hex(6)
+                    payload = {"id": cid, "productId": product["id"], "productName": product["name"], "productSlug": product["slug"],
+                               "productImage": product.get("thumbnailUrl"), "unit": product["unit"], "unitPrice": product["price"],
+                               "quantity": quantity, "requiresPrescription": product["requiresPrescription"], "isActive": True}
+                payload["totalPrice"] = payload["unitPrice"] * payload["quantity"]
+                save(db, "cart", cid, uid, payload)
+                return out(api(cart_payload(db, uid)), 201)
+            if len(segs) >= 3:
+                cid = segs[2]
+                owner, payload = get(db, "cart", cid)
+                if method == "DELETE" and len(segs) == 3:
+                    remove(db, "cart", cid, uid)
+                    return out(api(cart_payload(db, uid)))
+                if not payload or owner != uid:
+                    return fail("Không tìm thấy sản phẩm trong giỏ", 404)
+                if method in ("PUT", "PATCH") and len(segs) == 3:
+                    try:
+                        payload["quantity"] = max(1, int(data.get("quantity", payload["quantity"]) or 1))
+                    except (TypeError, ValueError):
+                        return fail("Số lượng không hợp lệ")
+                elif method in ("PUT", "PATCH", "POST") and len(segs) == 4 and segs[3] in ("increase", "decrease"):
+                    payload["quantity"] = max(1, int(payload["quantity"]) + (1 if segs[3] == "increase" else -1))
+                else:
+                    return False
+                payload["totalPrice"] = payload["unitPrice"] * payload["quantity"]
+                save(db, "cart", cid, uid, payload)
+                return out(api(cart_payload(db, uid)))
 
     # ---- ví MoMo (sandbox mặc định)
     if head == "payments" and segs[1:2] == ["momo"]:

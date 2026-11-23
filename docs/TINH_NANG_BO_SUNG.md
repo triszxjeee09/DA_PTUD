@@ -63,6 +63,8 @@ trong app ngân hàng rồi bấm **Xác nhận đã nhận tiền** ở chi ti�
 
 ## Sửa lỗi có sẵn trong backend
 
+* **Giỏ hàng:** `POST /cart/items` trả về *một dòng sản phẩm* nhưng app đọc như *cả giỏ hàng* → thêm xong giỏ hiện trống; nút +/− (`/increase`, `/decrease`) và xóa cả giỏ (`DELETE /cart`) không có route. Nay mọi thao tác trả về giỏ đầy đủ, cùng sản phẩm được gộp số lượng, và app luôn đọc lại giỏ sau mỗi thao tác.
+* **Upload ảnh trên Flutter Web:** code cũ dùng `dart:io File`/`Image.file` (không chạy trên web) cho ảnh đơn thuốc, avatar, ảnh danh mục. Nay dùng `XFile` + bytes (`core/utils/upload_file.dart`, `core/widgets/xfile_image.dart`); backend nhận diện loại ảnh theo nội dung khi tên file không có đuôi.
 * **Bảo mật:** khách có thể tự gọi `PUT /payments/{id}/status` để đánh dấu đơn của chính mình là `PAID`. Nay chỉ admin (hoặc luồng xác minh MoMo) mới đặt được `PAID/SUCCESS/REFUNDED`.
 
 * Transaction SQLite được commit **sau khi** trả response → client gọi API kế tiếp có thể đọc dữ liệu cũ (test cũ chạy lúc đạt lúc hỏng). Nay commit trước khi gửi.

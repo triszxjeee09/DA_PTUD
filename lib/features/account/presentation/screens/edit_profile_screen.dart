@@ -1,11 +1,10 @@
-import 'dart:io';
-
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 
 import '../../../../app/theme.dart';
+import '../../../../core/widgets/xfile_image.dart';
 import '../../../auth/data/models/user_model.dart';
 import '../../../auth/providers/auth_provider.dart';
 
@@ -18,7 +17,7 @@ class EditProfileScreen extends StatefulWidget {
 
 class _EditProfileScreenState extends State<EditProfileScreen> {
   final ImagePicker _imagePicker = ImagePicker();
-  File? _previewAvatar;
+  XFile? _previewAvatar;
 
   Future<void> _showAvatarSourceSheet() async {
     final provider = context.read<AuthProvider>();
@@ -84,7 +83,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         return;
       }
 
-      final avatarFile = File(pickedFile.path);
+      final avatarFile = pickedFile;
       setState(() => _previewAvatar = avatarFile);
 
       final provider = context.read<AuthProvider>();
@@ -159,7 +158,7 @@ class _AvatarSection extends StatelessWidget {
   });
 
   final UserModel user;
-  final File? previewAvatar;
+  final XFile? previewAvatar;
   final bool isUploading;
   final VoidCallback onChangeAvatar;
 
@@ -212,7 +211,7 @@ class _EditableAvatar extends StatelessWidget {
   });
 
   final String? avatarUrl;
-  final File? previewAvatar;
+  final XFile? previewAvatar;
   final bool isUploading;
 
   @override
@@ -260,13 +259,18 @@ class _AvatarImage extends StatelessWidget {
   const _AvatarImage({this.avatarUrl, this.file});
 
   final String? avatarUrl;
-  final File? file;
+  final XFile? file;
 
   @override
   Widget build(BuildContext context) {
     final localFile = file;
     if (localFile != null) {
-      return Image.file(localFile, width: 116, height: 116, fit: BoxFit.cover);
+      return XFileImage(
+        file: localFile,
+        width: 116,
+        height: 116,
+        fit: BoxFit.cover,
+      );
     }
 
     final imageUrl = avatarUrl?.trim();

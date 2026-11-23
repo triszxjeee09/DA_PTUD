@@ -1,10 +1,10 @@
-import 'dart:io';
-
 import 'package:dio/dio.dart';
+import 'package:image_picker/image_picker.dart';
 
 import '../../constants/api_constants.dart';
 import '../../errors/api_exception.dart';
 import '../../network/dio_client.dart';
+import '../../utils/upload_file.dart';
 import '../models/file_upload_response_model.dart';
 
 class FileUploadService {
@@ -18,12 +18,12 @@ class FileUploadService {
   final DioClient _dioClient;
 
   Future<FileUploadResponseModel> uploadImage({
-    required File file,
+    required XFile file,
     required String folder,
   }) async {
     try {
       final formData = FormData.fromMap({
-        'file': await MultipartFile.fromFile(file.path),
+        'file': await UploadFile.toMultipart(file),
         'folder': folder,
       });
 

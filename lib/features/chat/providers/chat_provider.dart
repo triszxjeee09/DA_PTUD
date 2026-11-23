@@ -1,7 +1,6 @@
 import 'dart:async';
-import 'dart:io';
-
 import 'package:flutter/foundation.dart';
+import 'package:image_picker/image_picker.dart';
 
 import '../../../core/data/services/file_upload_service.dart';
 import '../../../core/network/json_api.dart';
@@ -135,7 +134,7 @@ class ChatProvider extends ChangeNotifier {
 
   Future<bool> send({
     String content = '',
-    File? image,
+    XFile? image,
     String? productId,
   }) async {
     final conversation = _conversation;

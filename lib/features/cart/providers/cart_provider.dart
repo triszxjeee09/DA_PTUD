@@ -90,7 +90,9 @@ class CartProvider extends ChangeNotifier {
     _setUpdating(true);
 
     try {
-      _cart = await action();
+      await action();
+      // Luôn đọc lại giỏ hàng đầy đủ từ máy chủ để không phụ thuộc vào định dạng phản hồi của từng thao tác.
+      _cart = await _cartService.getMyCart();
       _errorMessage = null;
       return true;
     } catch (error) {

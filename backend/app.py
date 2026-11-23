@@ -23,6 +23,7 @@ import extras  # tính năng mở rộng: yêu thích, nhắc thuốc, chat, đi
 DB_PATH = Path(os.environ.get("PHARMA_DB", ROOT / "data" / "an_tam_pharma.sqlite3"))
 DB_PATH.parent.mkdir(parents=True, exist_ok=True)
 UPLOAD_DIR = Path(os.environ.get("PHARMA_UPLOADS", ROOT / "uploads"))
+ALLOWED_UPLOAD_EXT = {".jpg", ".jpeg", ".png", ".webp", ".pdf"}
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 NOW = lambda: datetime.now(timezone.utc).isoformat()
 FCM = None
@@ -258,7 +259,10 @@ class Handler(BaseHTTPRequestHandler):
 
     def save_upload(self, file):
         filename=os.path.basename(file["filename"] or "upload"); ext=Path(filename).suffix.lower()
-        if ext not in {".jpg",".jpeg",".png",".webp",".pdf"}: raise ValueError("Chỉ nhận tệp JPG, PNG, WEBP hoặc PDF")
+        if ext not in ALLOWED_UPLOAD_EXT:
+            # Trình duyệt (Flutter Web) đôi khi gửi tên không có đuôi: suy ra từ content-type hoặc nội dung file.
+            ext=extras.sniff_extension(file.get("contentType"), file["data"]) or ext
+        if ext not in ALLOWED_UPLOAD_EXT: raise ValueError("Chỉ nhận tệp JPG, PNG, WEBP hoặc PDF")
         if len(file["data"])>15*1024*1024: raise ValueError("Tệp vượt quá giới hạn 15MB")
         safe_name=secrets.token_hex(16)+ext; target=UPLOAD_DIR/safe_name; target.write_bytes(file["data"])
         return {"url":f"http://{self.headers.get('Host','localhost')}/api/v1/files/{safe_name}","fileUrl":f"http://{self.headers.get('Host','localhost')}/api/v1/files/{safe_name}","fileName":safe_name,"originalFileName":filename,"size":len(file["data"]),"contentType":file["contentType"]}

@@ -1,5 +1,3 @@
-import 'dart:io';
-
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
@@ -228,7 +226,7 @@ class ChatComposer extends StatefulWidget {
     this.hint = 'Nhập tin nhắn...',
   });
 
-  final Future<void> Function(String text, File? image) onSend;
+  final Future<void> Function(String text, XFile? image) onSend;
   final VoidCallback? onPickProduct;
   final bool allowImage;
   final bool isSending;
@@ -289,7 +287,7 @@ class _ChatComposerState extends State<ChatComposer> {
     if (picked == null) {
       return;
     }
-    await widget.onSend('', File(picked.path));
+    await widget.onSend('', picked);
   }
 
   @override

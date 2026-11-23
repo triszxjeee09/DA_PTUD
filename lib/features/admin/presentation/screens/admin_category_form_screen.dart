@@ -1,5 +1,3 @@
-import 'dart:io';
-
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
@@ -171,7 +169,7 @@ class _AdminCategoryFormScreenState extends State<AdminCategoryFormScreen> {
 
       setState(() => _isUploadingImage = true);
       final uploadResponse = await _fileUploadService.uploadImage(
-        file: File(pickedFile.path),
+        file: pickedFile,
         folder: 'categories',
       );
 

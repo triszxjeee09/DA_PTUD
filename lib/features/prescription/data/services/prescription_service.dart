@@ -1,12 +1,12 @@
-import 'dart:io';
-
 import 'package:dio/dio.dart';
+import 'package:image_picker/image_picker.dart';
 
 import '../../../../core/constants/api_constants.dart';
 import '../../../../core/errors/api_exception.dart';
 import '../../../../core/network/api_response.dart';
 import '../../../../core/network/dio_client.dart';
 import '../../../../core/network/page_response.dart';
+import '../../../../core/utils/upload_file.dart';
 import '../models/create_prescription_request_model.dart';
 import '../models/prescription_model.dart';
 
@@ -35,7 +35,7 @@ class PrescriptionService {
     required String patientName,
     String? patientPhone,
     String? note,
-    required List<File> files,
+    required List<XFile> files,
   }) async {
     final formData = FormData.fromMap({
       'patientName': patientName,
@@ -43,7 +43,7 @@ class PrescriptionService {
         'patientPhone': patientPhone.trim(),
       if (note != null && note.trim().isNotEmpty) 'note': note.trim(),
       'files': await Future.wait(
-        files.map((file) => MultipartFile.fromFile(file.path)),
+        files.map(UploadFile.toMultipart),
       ),
     });
 
@@ -80,7 +80,7 @@ class PrescriptionService {
         ),
       );
 
-      return _requireData(apiResponse);
+      return await _requireData(apiResponse);
     } on DioException catch (error) {
       throw _toApiException(error);
     } on ApiException {
@@ -106,7 +106,7 @@ class PrescriptionService {
         (json) => PrescriptionModel.fromJson(_asJsonObject(json)),
       );
 
-      return _requireData(apiResponse);
+      return await _requireData(apiResponse);
     } on DioException catch (error) {
       throw _toApiException(error);
     } on ApiException {

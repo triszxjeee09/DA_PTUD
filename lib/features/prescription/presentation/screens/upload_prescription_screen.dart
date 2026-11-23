@@ -1,5 +1,3 @@
-import 'dart:io';
-
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
@@ -7,6 +5,7 @@ import 'package:provider/provider.dart';
 import '../../../../app/routes.dart';
 import '../../../../app/theme.dart';
 import '../../../../core/widgets/app_loading.dart';
+import '../../../../core/widgets/xfile_image.dart';
 import '../../providers/prescription_provider.dart';
 
 class UploadPrescriptionScreen extends StatefulWidget {
@@ -24,7 +23,7 @@ class _UploadPrescriptionScreenState extends State<UploadPrescriptionScreen> {
   final _noteController = TextEditingController();
   final _imagePicker = ImagePicker();
 
-  final List<File> _selectedFiles = [];
+  final List<XFile> _selectedFiles = [];
 
   @override
   void dispose() {
@@ -44,7 +43,7 @@ class _UploadPrescriptionScreenState extends State<UploadPrescriptionScreen> {
         return;
       }
 
-      setState(() => _selectedFiles.add(File(image.path)));
+      setState(() => _selectedFiles.add(image));
       context.read<PrescriptionProvider>().clearError();
     } catch (_) {
       _showSnackBar('Không thể mở máy ảnh. Vui lòng thử lại.');
@@ -59,7 +58,7 @@ class _UploadPrescriptionScreenState extends State<UploadPrescriptionScreen> {
       }
 
       setState(
-        () => _selectedFiles.addAll(images.map((image) => File(image.path))),
+        () => _selectedFiles.addAll(images),
       );
       context.read<PrescriptionProvider>().clearError();
     } catch (_) {
@@ -322,7 +321,7 @@ class _UploadArea extends StatelessWidget {
 class _SelectedImageList extends StatelessWidget {
   const _SelectedImageList({required this.files, required this.onRemove});
 
-  final List<File> files;
+  final List<XFile> files;
   final ValueChanged<int> onRemove;
 
   @override
@@ -338,8 +337,8 @@ class _SelectedImageList extends StatelessWidget {
             children: [
               ClipRRect(
                 borderRadius: BorderRadius.circular(14),
-                child: Image.file(
-                  files[index],
+                child: XFileImage(
+                  file: files[index],
                   width: 92,
                   height: 92,
                   fit: BoxFit.cover,

@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:webview_flutter/webview_flutter.dart';
@@ -82,6 +83,11 @@ class _MomoWebViewScreenState extends State<MomoWebViewScreen> {
     if (uri == null || !uri.hasScheme) {
       _isLoading = false;
       _hasError = true;
+      return;
+    }
+    if (kIsWeb) {
+      // WebView không chạy trên Flutter Web: mở trang thanh toán ở tab mới.
+      _isLoading = false;
       return;
     }
 
@@ -217,7 +223,43 @@ class _MomoWebViewScreenState extends State<MomoWebViewScreen> {
           Expanded(
             child: Stack(
               children: [
-                if (_hasError || controller == null)
+                if (kIsWeb && !_hasError)
+                  Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(24),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(
+                            Icons.account_balance_wallet_outlined,
+                            size: 56,
+                            color: AppTheme.primaryBlue,
+                          ),
+                          const SizedBox(height: 12),
+                          Text(
+                            'Thanh toán đơn ${widget.orderCode}',
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w800,
+                              fontSize: 17,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          const Text(
+                            'Trang thanh toán MoMo sẽ mở ở tab mới. Sau khi thanh toán xong, '
+                            'quay lại đây và bấm "Tôi đã thanh toán".',
+                            textAlign: TextAlign.center,
+                          ),
+                          const SizedBox(height: 16),
+                          FilledButton.icon(
+                            onPressed: () => _openExternal(widget.payUrl),
+                            icon: const Icon(Icons.open_in_new),
+                            label: const Text('Mở trang thanh toán MoMo'),
+                          ),
+                        ],
+                      ),
+                    ),
+                  )
+                else if (_hasError || controller == null)
                   const Center(
                     child: Padding(
                       padding: EdgeInsets.all(24),
