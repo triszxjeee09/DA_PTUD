@@ -1,4 +1,4 @@
-import 'package:doan/core/utils/validators.dart';
+import 'package:an_tam_pharma/core/utils/validators.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {

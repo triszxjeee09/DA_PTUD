@@ -1,11 +1,11 @@
 {
-    "name": "doan",
-    "short_name": "doan",
+    "name": "An Tâm Pharma",
+    "short_name": "An Tâm",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",
     "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "description": "Ứng dụng nhà thuốc An Tâm Pharma.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

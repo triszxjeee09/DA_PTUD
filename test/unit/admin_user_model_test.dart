@@ -1,4 +1,4 @@
-import 'package:doan/features/admin/data/models/admin_user_model.dart';
+import 'package:an_tam_pharma/features/admin/data/models/admin_user_model.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {

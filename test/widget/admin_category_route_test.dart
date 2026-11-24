@@ -1,12 +1,11 @@
-import 'package:doan/app/routes.dart';
-import 'package:doan/app/theme.dart';
-import 'package:doan/core/storage/token_storage.dart';
-import 'package:doan/features/admin/data/models/admin_category_model.dart';
-import 'package:doan/features/admin/providers/admin_category_provider.dart';
-import 'package:doan/features/auth/data/models/user_model.dart';
-import 'package:doan/features/auth/data/services/auth_service.dart';
-import 'package:doan/features/auth/data/services/google_auth_service.dart';
-import 'package:doan/features/auth/providers/auth_provider.dart';
+import 'package:an_tam_pharma/app/routes.dart';
+import 'package:an_tam_pharma/app/theme.dart';
+import 'package:an_tam_pharma/core/storage/token_storage.dart';
+import 'package:an_tam_pharma/features/admin/data/models/admin_category_model.dart';
+import 'package:an_tam_pharma/features/admin/providers/admin_category_provider.dart';
+import 'package:an_tam_pharma/features/auth/data/models/user_model.dart';
+import 'package:an_tam_pharma/features/auth/data/services/auth_service.dart';
+import 'package:an_tam_pharma/features/auth/providers/auth_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
@@ -122,7 +121,6 @@ class _FakeAuthProvider extends AuthProvider {
     : _currentUser = currentUser,
       super(
         authService: _NoopAuthService(),
-        googleAuthService: _NoopGoogleAuthService(),
         tokenStorage: _NoopTokenStorage(),
       );
 
@@ -133,10 +131,5 @@ class _FakeAuthProvider extends AuthProvider {
 }
 
 class _NoopAuthService extends AuthService {}
-
-class _NoopGoogleAuthService extends GoogleAuthService {
-  @override
-  Future<void> dispose() async {}
-}
 
 class _NoopTokenStorage extends TokenStorage {}

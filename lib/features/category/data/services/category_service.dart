@@ -1,20 +1,23 @@
 import 'package:dio/dio.dart';
 
 import '../../../../core/constants/api_constants.dart';
+import '../../../../core/database/local_json_cache.dart';
 import '../../../../core/errors/api_exception.dart';
 import '../../../../core/network/api_response.dart';
 import '../../../../core/network/dio_client.dart';
 import '../models/category_model.dart';
 
 class CategoryService {
-  CategoryService({DioClient? dioClient, Dio? dio})
-    : _dioClient = dioClient ?? DioClient(dio: dio);
+  CategoryService({DioClient? dioClient, Dio? dio, JsonCache? localCache})
+    : _dioClient = dioClient ?? DioClient(dio: dio),
+      _localCache = localCache ?? LocalJsonCache.instance;
 
   static const String _connectionErrorMessage = 'Không thể kết nối đến máy chủ';
   static const String _defaultErrorMessage =
       'Đã có lỗi xảy ra, vui lòng thử lại';
 
   final DioClient _dioClient;
+  final JsonCache _localCache;
 
   Future<List<CategoryModel>> getCategories() async {
     try {
@@ -26,14 +29,47 @@ class CategoryService {
         ).map((item) => CategoryModel.fromJson(_asJsonObject(item))).toList(),
       );
 
+      final data = _asJsonObject(response.data)['data'];
+      if (data is List) {
+        await _localCache.write('categories', {'items': data});
+      }
       return apiResponse.data ?? const [];
     } on DioException catch (error) {
+      if (_isConnectionError(error)) {
+        final cached = await _readCachedCategories();
+        if (cached != null) return cached;
+      }
       throw _toApiException(error);
-    } on ApiException {
+    } on ApiException catch (error) {
+      if (_isConnectionApiException(error)) {
+        final cached = await _readCachedCategories();
+        if (cached != null) return cached;
+      }
       rethrow;
     } catch (_) {
       throw const ApiException(_defaultErrorMessage);
     }
+  }
+
+  Future<List<CategoryModel>?> _readCachedCategories() async {
+    final cached = await _localCache.read('categories');
+    final items = cached?['items'];
+    if (items is! List) return null;
+    return items
+        .whereType<Map>()
+        .map((item) => CategoryModel.fromJson(_asJsonObject(item)))
+        .toList(growable: false);
+  }
+
+  bool _isConnectionError(DioException error) {
+    return error.type == DioExceptionType.connectionTimeout ||
+        error.type == DioExceptionType.receiveTimeout ||
+        error.type == DioExceptionType.sendTimeout ||
+        error.type == DioExceptionType.connectionError;
+  }
+
+  bool _isConnectionApiException(ApiException error) {
+    return error.statusCode == null && error.message == _connectionErrorMessage;
   }
 
   ApiResponse<T> _parseApiResponse<T>(

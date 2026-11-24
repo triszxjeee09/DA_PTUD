@@ -1,5 +1,14 @@
+// When Android Studio's annotation extractor artifacts are preloaded locally,
+// use them before remote repositories so first-time/offline builds can finish.
+val codexLocalMavenRepo = System.getenv("LOCALAPPDATA")?.let {
+    file("$it/AnTamPharma/maven")
+}
+
 allprojects {
     repositories {
+        codexLocalMavenRepo?.takeIf { it.isDirectory }?.let {
+            maven { url = uri(it) }
+        }
         google()
         mavenCentral()
     }

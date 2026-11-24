@@ -54,7 +54,7 @@ class AdminVoucherService {
         (json) => _readVoucherPage(json, page: page, size: size),
       );
 
-      return _requireData(apiResponse);
+      return await _requireData(apiResponse);
     } on DioException catch (error) {
       throw _toApiException(error);
     } on ApiException catch (error) {
@@ -76,7 +76,7 @@ class AdminVoucherService {
         (json) => AdminVoucherModel.fromJson(_asJsonObject(json)),
       );
 
-      return _requireData(apiResponse);
+      return await _requireData(apiResponse);
     } on DioException catch (error) {
       throw _toApiException(error);
     } on ApiException catch (error) {
@@ -105,7 +105,7 @@ class AdminVoucherService {
         (json) => AdminVoucherModel.fromJson(_asJsonObject(json)),
       );
 
-      return _requireData(apiResponse);
+      return await _requireData(apiResponse);
     } on DioException catch (error) {
       throw _toApiException(error);
     } on ApiException catch (error) {
@@ -135,7 +135,7 @@ class AdminVoucherService {
         (json) => AdminVoucherModel.fromJson(_asJsonObject(json)),
       );
 
-      return _requireData(apiResponse);
+      return await _requireData(apiResponse);
     } on DioException catch (error) {
       throw _toApiException(error);
     } on ApiException catch (error) {

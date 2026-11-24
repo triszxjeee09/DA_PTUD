@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:doan/core/utils/currency_formatter.dart';
+import 'package:an_tam_pharma/core/utils/currency_formatter.dart';
 
 void main() {
   group('CurrencyFormatter.format - Nhóm test PASS', () {

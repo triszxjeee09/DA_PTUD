@@ -1,4 +1,4 @@
-package com.example.doan;
+package vn.antam.pharma;
 
 import io.flutter.embedding.android.FlutterActivity;
 

@@ -8,7 +8,7 @@
 PRODUCT_NAME = doan
 
 // The application's bundle identifier
-PRODUCT_BUNDLE_IDENTIFIER = com.example.doan
+PRODUCT_BUNDLE_IDENTIFIER = vn.antam.pharma
 
 // The copyright displayed in application information
 PRODUCT_COPYRIGHT = Copyright © 2026 com.example. All rights reserved.

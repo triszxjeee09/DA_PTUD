@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../core/widgets/require_auth.dart';
 import '../features/account/presentation/screens/account_screen.dart';
 import '../features/cart/presentation/screens/cart_screen.dart';
+import '../features/category/presentation/screens/category_browser_screen.dart';
 import '../features/home/presentation/screens/home_screen.dart';
 import '../features/order/presentation/screens/order_history_screen.dart';
 import 'theme.dart';
@@ -19,7 +20,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
 
   final List<Widget> _screens = const [
     HomeScreen(),
-    _MainPlaceholderScreen(title: 'Danh mục'),
+    CategoryBrowserScreen(),
     RequireAuth(child: CartScreen()),
     RequireAuth(child: OrderHistoryScreen()),
     RequireAuth(child: AccountScreen()),
@@ -76,28 +77,6 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
               label: 'Tài khoản',
             ),
           ],
-        ),
-      ),
-    );
-  }
-}
-
-class _MainPlaceholderScreen extends StatelessWidget {
-  const _MainPlaceholderScreen({required this.title});
-
-  final String title;
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: Text(title)),
-      body: Center(
-        child: Text(
-          title,
-          style: Theme.of(context).textTheme.titleLarge?.copyWith(
-            color: AppTheme.darkBlue,
-            fontWeight: FontWeight.w800,
-          ),
         ),
       ),
     );
