@@ -24,6 +24,7 @@ DB_PATH = Path(os.environ.get("PHARMA_DB", ROOT / "data" / "an_tam_pharma.sqlite
 DB_PATH.parent.mkdir(parents=True, exist_ok=True)
 UPLOAD_DIR = Path(os.environ.get("PHARMA_UPLOADS", ROOT / "uploads"))
 ALLOWED_UPLOAD_EXT = {".jpg", ".jpeg", ".png", ".webp", ".pdf"}
+BUILD_VERSION = "2026-11-23-r5"  # tăng số này mỗi lần sửa backend để biết đang chạy bản nào
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 NOW = lambda: datetime.now(timezone.utc).isoformat()
 FCM = None
@@ -287,7 +288,7 @@ class Handler(BaseHTTPRequestHandler):
         with connect() as db:
             self._db = db
             user = self.user(db)
-            if path == "/health": return self.send_json(api({"status":"UP","database":"SQLite","file":str(DB_PATH)}))
+            if path == "/health": return self.send_json(api({"status":"UP","database":"SQLite","file":str(DB_PATH),"version":BUILD_VERSION,"source":str(Path(__file__).resolve()),"momoSandbox":extras.momo.config()["isSandbox"],"bankAccountIsSample":extras.BANK_INFO["accountNo"]=="0123456789"}))
             if path == "/auth/login" and method == "POST":
                 key = str(data.get("username", data.get("email", ""))).strip().lower()
                 u = db.execute("SELECT * FROM users WHERE lower(username)=? OR lower(email)=? OR phone=?", (key,key,key)).fetchone()
@@ -820,5 +821,17 @@ class Handler(BaseHTTPRequestHandler):
 
 if __name__ == "__main__":
     seed(); configure_firebase(); extras.start_scheduler(connect, lambda: send_fcm); host=os.environ.get("HOST","0.0.0.0"); port=int(os.environ.get("PORT","8082"))
-    print(f"An Tam Pharma API running at http://{host}:{port}/api/v1 (SQLite: {DB_PATH})")
-    ThreadingHTTPServer((host,port),Handler).serve_forever()
+    try:
+        server=ThreadingHTTPServer((host,port),Handler)
+    except OSError as error:
+        print(f"\n[LỖI] Không mở được cổng {port}: {error}\n"
+              f"Rất có thể backend CŨ vẫn đang chạy ở cổng này nên bản mới không khởi động được.\n"
+              f"Hãy tắt tiến trình cũ (PowerShell): Get-NetTCPConnection -LocalPort {port} | "
+              f"ForEach-Object {{ Stop-Process -Id $_.OwningProcess -Force }}  rồi chạy lại.\n", flush=True)
+        raise SystemExit(1)
+    bank=extras.BANK_INFO
+    print(f"An Tam Pharma API {BUILD_VERSION} running at http://{host}:{port}/api/v1 (SQLite: {DB_PATH})")
+    print(f"Mã nguồn đang chạy: {Path(__file__).resolve()}")
+    print(f"Ngân hàng nhận tiền: {bank['bankName']} (BIN {bank['bankId']}) - TK ...{bank['accountNo'][-4:]} - {bank['accountName']}"
+          + ("  [ĐANG DÙNG TÀI KHOẢN MẪU - hãy sửa trong run.ps1]" if bank["accountNo"]=="0123456789" else ""), flush=True)
+    server.serve_forever()
