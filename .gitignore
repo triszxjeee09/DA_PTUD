@@ -61,4 +61,5 @@ backend/__pycache__/
 backend/uploads/
 android/local.properties
 .flutter-plugins-dependencies
-
+backend/settings.local.json
+backend/local.settings.ps1

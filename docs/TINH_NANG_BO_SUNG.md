@@ -58,7 +58,7 @@ $env:PHARMA_MOMO_ENDPOINT     = "https://payment.momo.vn/v2/gateway/api"
 $env:PHARMA_PUBLIC_URL        = "https://<địa-chỉ-công-khai>"   # tùy chọn, để nhận IPN
 ```
 
-Chuyển khoản ngân hàng: **sửa 4 dòng `PHARMA_BANK_*` trong `backend/run.ps1`** (hoặc đặt biến môi trường) rồi chạy lại backend; kiểm tra tại `http://127.0.0.1:8082/api/v1/support/info`. Mã BIN thường dùng: MB 970422, Vietcombank 970436, Techcombank 970407, BIDV 970418, VietinBank 970415, ACB 970416, VPBank 970432, TPBank 970423, Sacombank 970403 (đối chiếu lại tại vietqr.io). Các biến: `PHARMA_BANK_ID`, `PHARMA_BANK_NAME`, `PHARMA_BANK_ACCOUNT`, `PHARMA_BANK_OWNER`. Admin kiểm tra tiền
+Chuyển khoản ngân hàng: **copy `backend/settings.local.example.json` thành `backend/settings.local.json` và điền tài khoản thật** (file này không đưa lên git; sửa xong không cần khởi động lại backend). Cách khác: sửa các dòng `PHARMA_BANK_*` trong `backend/run.ps1` hoặc đặt biến môi trường (biến môi trường được ưu tiên cao nhất); kiểm tra tại `http://127.0.0.1:8082/api/v1/support/info`. Mã BIN thường dùng: MB 970422, Vietcombank 970436, Techcombank 970407, BIDV 970418, VietinBank 970415, ACB 970416, VPBank 970432, TPBank 970423, Sacombank 970403 (đối chiếu lại tại vietqr.io). Các biến: `PHARMA_BANK_ID`, `PHARMA_BANK_NAME`, `PHARMA_BANK_ACCOUNT`, `PHARMA_BANK_OWNER`. Admin kiểm tra tiền
 trong app ngân hàng rồi bấm **Xác nhận đã nhận tiền** ở chi tiết đơn (`POST /orders/admin/{id}/confirm-payment`).
 
 ## Sửa lỗi có sẵn trong backend

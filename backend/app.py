@@ -24,7 +24,7 @@ DB_PATH = Path(os.environ.get("PHARMA_DB", ROOT / "data" / "an_tam_pharma.sqlite
 DB_PATH.parent.mkdir(parents=True, exist_ok=True)
 UPLOAD_DIR = Path(os.environ.get("PHARMA_UPLOADS", ROOT / "uploads"))
 ALLOWED_UPLOAD_EXT = {".jpg", ".jpeg", ".png", ".webp", ".pdf"}
-BUILD_VERSION = "2026-11-23-r5"  # tăng số này mỗi lần sửa backend để biết đang chạy bản nào
+BUILD_VERSION = "2026-11-24-r6"  # tăng số này mỗi lần sửa backend để biết đang chạy bản nào
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 NOW = lambda: datetime.now(timezone.utc).isoformat()
 FCM = None
@@ -288,7 +288,7 @@ class Handler(BaseHTTPRequestHandler):
         with connect() as db:
             self._db = db
             user = self.user(db)
-            if path == "/health": return self.send_json(api({"status":"UP","database":"SQLite","file":str(DB_PATH),"version":BUILD_VERSION,"source":str(Path(__file__).resolve()),"momoSandbox":extras.momo.config()["isSandbox"],"bankAccountIsSample":extras.BANK_INFO["accountNo"]=="0123456789"}))
+            if path == "/health": return self.send_json(api({"status":"UP","database":"SQLite","file":str(DB_PATH),"version":BUILD_VERSION,"source":str(Path(__file__).resolve()),"momoSandbox":extras.momo.config()["isSandbox"],"bankAccountIsSample":extras.bank_info()["accountNo"]=="0123456789"}))
             if path == "/auth/login" and method == "POST":
                 key = str(data.get("username", data.get("email", ""))).strip().lower()
                 u = db.execute("SELECT * FROM users WHERE lower(username)=? OR lower(email)=? OR phone=?", (key,key,key)).fetchone()
@@ -829,7 +829,7 @@ if __name__ == "__main__":
               f"Hãy tắt tiến trình cũ (PowerShell): Get-NetTCPConnection -LocalPort {port} | "
               f"ForEach-Object {{ Stop-Process -Id $_.OwningProcess -Force }}  rồi chạy lại.\n", flush=True)
         raise SystemExit(1)
-    bank=extras.BANK_INFO
+    bank=extras.bank_info()
     print(f"An Tam Pharma API {BUILD_VERSION} running at http://{host}:{port}/api/v1 (SQLite: {DB_PATH})")
     print(f"Mã nguồn đang chạy: {Path(__file__).resolve()}")
     print(f"Ngân hàng nhận tiền: {bank['bankName']} (BIN {bank['bankId']}) - TK ...{bank['accountNo'][-4:]} - {bank['accountName']}"

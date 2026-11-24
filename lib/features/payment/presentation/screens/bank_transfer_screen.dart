@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:qr_flutter/qr_flutter.dart';
 
 import '../../../../app/routes.dart';
 import '../../../../app/theme.dart';
@@ -99,21 +100,49 @@ class _BankTransferScreenState extends State<BankTransferScreen> {
                     padding: const EdgeInsets.all(16),
                     child: Column(
                       children: [
-                        ClipRRect(
-                          borderRadius: BorderRadius.circular(12),
-                          child: Image.network(
-                            info['qrUrl'].toString(),
-                            height: 240,
-                            fit: BoxFit.contain,
-                            loadingBuilder: (context, child, progress) => progress == null
-                                ? child
-                                : const SizedBox(height: 240, child: Center(child: CircularProgressIndicator())),
-                            errorBuilder: (_, __, ___) => const SizedBox(
-                              height: 120,
-                              child: Center(child: Text('Không tải được mã QR, vui lòng chuyển khoản thủ công')),
+                        if ('${info['isSampleAccount']}' == 'true')
+                          Container(
+                            width: double.infinity,
+                            margin: const EdgeInsets.only(bottom: 12),
+                            padding: const EdgeInsets.all(10),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFFFF4E5),
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: const Text(
+                              'Đang dùng tài khoản MẪU. Quản trị viên cần cập nhật tài khoản thật '
+                              'trong backend/settings.local.json.',
+                              style: TextStyle(fontSize: 12.5),
                             ),
                           ),
-                        ),
+                        if ('${info['qrContent'] ?? ''}'.isNotEmpty)
+                          Container(
+                            color: Colors.white,
+                            padding: const EdgeInsets.all(8),
+                            child: QrImageView(
+                              data: info['qrContent'].toString(),
+                              version: QrVersions.auto,
+                              size: 240,
+                              backgroundColor: Colors.white,
+                            ),
+                          )
+                        else
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(12),
+                            child: Image.network(
+                              info['qrUrl'].toString(),
+                              height: 240,
+                              fit: BoxFit.contain,
+                              errorBuilder: (_, __, ___) => const SizedBox(
+                                height: 120,
+                                child: Center(
+                                  child: Text(
+                                    'Không tải được mã QR, vui lòng chuyển khoản thủ công',
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
                         const SizedBox(height: 12),
                         _row('Ngân hàng', '${info['bankName']}'),
                         _row('Số tài khoản', '${info['accountNo']}'),
