@@ -32,8 +32,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Future<void> _checkApi() async {
     setState(() => _checking = true);
     try {
-      await JsonApi().get('/support/info');
-      _apiStatus = 'Kết nối thành công';
+      final health = JsonApi.asMap(await JsonApi().get('/health'));
+      _apiStatus = 'Kết nối thành công • backend ${health['version'] ?? 'cũ (chưa có số phiên bản)'}';
     } catch (error) {
       _apiStatus = 'Không kết nối được: ${JsonApi.message(error)}';
     }

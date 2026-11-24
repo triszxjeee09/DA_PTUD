@@ -23,13 +23,59 @@ STAFF_ROLES = {"ADMIN", "PHARMACIST"}
 # App Flutter dùng DELIVERED, dữ liệu cũ dùng COMPLETED: cả hai đều là đơn đã hoàn tất.
 DONE_STATUSES = ("COMPLETED", "DELIVERED")
 TZ_HOURS = int(os.environ.get("PHARMA_TZ_OFFSET", "7"))  # Việt Nam UTC+7
-HOTLINE = os.environ.get("PHARMA_HOTLINE", "1900 1234")
-BANK_INFO = {
-    "bankId": os.environ.get("PHARMA_BANK_ID", "970422"),
-    "bankName": os.environ.get("PHARMA_BANK_NAME", "MB Bank"),
-    "accountNo": os.environ.get("PHARMA_BANK_ACCOUNT", "0123456789"),
-    "accountName": os.environ.get("PHARMA_BANK_OWNER", "NHA THUOC AN TAM"),
-}
+SETTINGS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "settings.local.json")
+_BANK_DEFAULTS = {"bankId": "970422", "bankName": "MB Bank", "accountNo": "0123456789", "accountName": "NHA THUOC AN TAM"}
+_BANK_ENV = {"bankId": "PHARMA_BANK_ID", "bankName": "PHARMA_BANK_NAME", "accountNo": "PHARMA_BANK_ACCOUNT",
+             "accountName": "PHARMA_BANK_OWNER"}
+
+
+def local_settings() -> dict:
+    """Đọc backend/settings.local.json (không đưa lên git). Đọc lại mỗi lần gọi nên sửa file không cần restart."""
+    try:
+        with open(SETTINGS_FILE, encoding="utf-8-sig") as handle:
+            data = json.load(handle)
+        return data if isinstance(data, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+
+def bank_info() -> dict:
+    """Tài khoản nhận tiền: mặc định < settings.local.json < biến môi trường."""
+    saved = local_settings().get("bank", {})
+    info = dict(_BANK_DEFAULTS)
+    for key, env_name in _BANK_ENV.items():
+        if str(saved.get(key, "")).strip():
+            info[key] = str(saved[key]).strip()
+        if os.environ.get(env_name, "").strip():
+            info[key] = os.environ[env_name].strip()
+    return info
+
+
+def hotline() -> str:
+    return os.environ.get("PHARMA_HOTLINE") or str(local_settings().get("hotline") or "1900 1234")
+
+
+def _tlv(tag: str, value: str) -> str:
+    return f"{tag}{len(value):02d}{value}"
+
+
+def crc16_ccitt(text: str) -> str:
+    crc = 0xFFFF
+    for byte in text.encode():
+        crc ^= byte << 8
+        for _ in range(8):
+            crc = ((crc << 1) ^ 0x1021) & 0xFFFF if crc & 0x8000 else (crc << 1) & 0xFFFF
+    return f"{crc:04X}"
+
+
+def vietqr_payload(bank_id: str, account_no: str, amount: int, memo: str) -> str:
+    """Chuỗi VietQR (chuẩn NAPAS 247, EMVCo) để app tự vẽ mã QR, không phụ thuộc dịch vụ ảnh bên ngoài."""
+    receiver = _tlv("00", bank_id) + _tlv("01", account_no)
+    merchant = _tlv("00", "A000000727") + _tlv("01", receiver) + _tlv("02", "QRIBFTTA")
+    body = (_tlv("00", "01") + _tlv("01", "12") + _tlv("38", merchant) + _tlv("53", "704")
+            + (_tlv("54", str(int(amount))) if amount else "") + _tlv("58", "VN")
+            + _tlv("62", _tlv("08", memo[:25])) + "6304")
+    return body + crc16_ccitt(body)
 
 
 def sniff_extension(content_type, data: bytes):
@@ -479,7 +525,7 @@ def bot_reply(db, user, text):
             return {"reply": f"Bạn đang có {s['points']} điểm, hạng {s['tierLabel']}. Cứ 1.000đ được 1 điểm; 100 điểm đổi voucher 10.000đ.",
                     "suggestions": suggestions, "products": []}
     if any(k in t for k in ("hotline", "tong dai", "lien he", "goi")):
-        return {"reply": f"Hotline hỗ trợ: {HOTLINE}. Bạn cũng có thể gửi yêu cầu hỗ trợ trong mục Trung tâm trợ giúp.",
+        return {"reply": f"Hotline hỗ trợ: {hotline()}. Bạn cũng có thể gửi yêu cầu hỗ trợ trong mục Trung tâm trợ giúp.",
                 "suggestions": suggestions, "products": []}
     if any(k in t for k in ("gap duoc si", "duoc si", "tu van")):
         return {"reply": "Bạn chuyển sang tab \"Dược sĩ\" để nhắn trực tiếp với dược sĩ nhé.", "suggestions": suggestions, "products": []}
@@ -658,8 +704,8 @@ def handle(send, db, send_fcm, method, path, q, data, user):
     if head == "support" and segs[1:] == ["faqs"] and method == "GET":
         return out(api(FAQS))
     if head == "support" and segs[1:] == ["info"] and method == "GET":
-        return out(api({"hotline": HOTLINE, "email": "hotro@antam.local", "workingHours": "07:00 - 22:00 hằng ngày",
-                        "bank": BANK_INFO}))
+        return out(api({"hotline": hotline(), "email": "hotro@antam.local", "workingHours": "07:00 - 22:00 hằng ngày",
+                        "bank": bank_info()}))
 
     # ---- sản phẩm: bổ sung rating/tồn kho
     if head == "products" and method == "GET" and len(segs) == 2 and segs[1] != "slug":
@@ -976,9 +1022,12 @@ def handle(send, db, send_fcm, method, path, q, data, user):
             return fail("Không tìm thấy đơn hàng", 404)
         amount = int(float(order.get("finalAmount", 0)))
         memo = order["orderCode"]
-        qr = (f"https://img.vietqr.io/image/{BANK_INFO['bankId']}-{BANK_INFO['accountNo']}-compact2.png"
-              f"?amount={amount}&addInfo={memo}&accountName={BANK_INFO['accountName'].replace(' ', '%20')}")
-        return out(api({**BANK_INFO, "amount": amount, "transferContent": memo, "qrUrl": qr, "orderCode": memo}))
+        bank = bank_info()
+        qr = (f"https://img.vietqr.io/image/{bank['bankId']}-{bank['accountNo']}-compact2.png"
+              f"?amount={amount}&addInfo={memo}&accountName={bank['accountName'].replace(' ', '%20')}")
+        return out(api({**bank, "amount": amount, "transferContent": memo, "qrUrl": qr, "orderCode": memo,
+                        "qrContent": vietqr_payload(bank["bankId"], bank["accountNo"], amount, memo),
+                        "isSampleAccount": bank["accountNo"] == _BANK_DEFAULTS["accountNo"]}))
 
     # ---- yêu thích
     if head == "favorites":

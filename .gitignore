@@ -53,3 +53,13 @@ backend/server.err.log
 backend/uploads/
 *firebase-service-account*.json
 /android/app/google-services.json
+
+# Dữ liệu chạy local, không đưa lên GitHub
+.tmp/
+backend/data/*.sqlite3
+backend/__pycache__/
+backend/uploads/
+android/local.properties
+.flutter-plugins-dependencies
+backend/settings.local.json
+backend/local.settings.ps1

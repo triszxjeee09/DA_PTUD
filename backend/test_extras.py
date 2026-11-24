@@ -127,6 +127,7 @@ def main():
             oid = order["data"]["id"]
             _, qr = request(base + f"/payments/bank-qr?orderId={oid}", token=cust)
             assert qr["data"]["amount"] == 195000 and qr["data"]["qrUrl"].startswith("https://img.vietqr.io/")
+            assert qr["data"]["qrContent"].startswith("000201") and qr["data"]["isSampleAccount"] is True
             _, st = request(base + "/orders/admin/" + oid + "/status", "PUT", {"status": "DELIVERED"}, admin)
             assert st["data"]["orderStatusLabel"] == "Đã giao"   # trạng thái mà app Flutter dùng
             _, loy = request(base + "/loyalty", token=cust)
@@ -299,6 +300,28 @@ def main():
         assert extras.favorites_tick(app.connect, fake_fcm) == 2                   # giá 65.000 < 80.000 và có hàng lại
         assert extras.favorites_tick(app.connect, fake_fcm) == 0
     print("PASS: scheduler — medication reminders (daily/weekly, dedupe) and favorite price/stock alerts")
+
+    # ---- Tài khoản ngân hàng: đọc từ settings.local.json mỗi lần gọi + chuỗi VietQR
+    assert extras.crc16_ccitt("123456789") == "29B1"            # vector chuẩn CRC-16/CCITT-FALSE
+    with tempfile.TemporaryDirectory(prefix="antam-bank-") as tmp:
+        for name in ("PHARMA_BANK_ID", "PHARMA_BANK_NAME", "PHARMA_BANK_ACCOUNT", "PHARMA_BANK_OWNER"):
+            os.environ.pop(name, None)
+        extras.SETTINGS_FILE = str(Path(tmp) / "settings.local.json")
+        assert extras.bank_info()["accountNo"] == "0123456789"   # chưa có file -> mẫu
+        Path(extras.SETTINGS_FILE).write_text(
+            '{"bank": {"bankId": "970405", "bankName": "Agribank", "accountNo": "0967118278", "accountName": "NGUYEN DUC TRI"}, "hotline": "0900 111 222"}',
+            encoding="utf-8")
+        info = extras.bank_info()
+        assert info["bankName"] == "Agribank" and info["accountNo"] == "0967118278" and extras.hotline() == "0900 111 222"
+        os.environ["PHARMA_BANK_ACCOUNT"] = "111222333"          # biến môi trường được ưu tiên
+        assert extras.bank_info()["accountNo"] == "111222333" and extras.bank_info()["bankId"] == "970405"
+        os.environ.pop("PHARMA_BANK_ACCOUNT")
+        Path(extras.SETTINGS_FILE).write_text("{hỏng json", encoding="utf-8")
+        assert extras.bank_info()["accountNo"] == "0123456789"   # file hỏng không làm sập backend
+        payload = extras.vietqr_payload("970405", "0967118278", 3750000, "ATC4F06DFB")
+        assert payload.startswith("000201010212") and payload.endswith(extras.crc16_ccitt(payload[:-4]))
+        assert "0010A000000727" in payload and "QRIBFTTA" in payload and "970405" in payload and "3750000" in payload and "ATC4F06DFB" in payload
+    print("PASS: bank settings (file/env/priority/bad-file) and VietQR payload with valid CRC")
 
     # ---- MoMo: gọi trực tiếp handler với MoMo giả (không cần mạng)
     momo = importlib.import_module("momo")
